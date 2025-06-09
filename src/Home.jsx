@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-
 
 const Home = () => {
-  const navigate = useNavigate();
   const [activeRole, setActiveRole] = useState(null);
   const [scrollY, setScrollY] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -13,10 +10,10 @@ const Home = () => {
     const handleMouseMove = (e) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
     };
-    
+
     window.addEventListener('scroll', handleScroll);
     window.addEventListener('mousemove', handleMouseMove);
-    
+
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('mousemove', handleMouseMove);
@@ -25,15 +22,17 @@ const Home = () => {
 
   const handleRoleSelection = (role) => {
     setActiveRole(role);
-    navigate(`/${role}`);
+    // navigate(`/${role}`);
   };
 
-  const hexPattern = "data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234f46e5' fill-opacity='0.03'%3E%3Cpath d='M60 0l30 17.32v34.64L60 69.28 30 52V17.32L60 0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E";
-
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-950 via-gray-900 to-black">
+    <div className="min-h-screen relative overflow-hidden bg-black">
+      {/* New Background Pattern */}
+      <div className="absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
+      <div className="absolute left-0 right-0 top-[-10%] h-[1000px] w-[1000px] rounded-full bg-[radial-gradient(circle_400px_at_50%_300px,#fbfbfb36,#000)] mx-auto"></div>
+
       {/* Dynamic cursor effect */}
-      <div 
+      <div
         className="fixed w-96 h-96 pointer-events-none z-0 opacity-20 transition-all duration-1000 ease-out"
         style={{
           background: 'radial-gradient(circle, rgba(147, 51, 234, 0.1) 0%, transparent 70%)',
@@ -42,40 +41,9 @@ const Home = () => {
         }}
       />
 
-      {/* Background layers */}
-      <div className="fixed inset-0 z-0">
-        <div 
-          className="absolute inset-0 opacity-40"
-          style={{ backgroundImage: `url("${hexPattern}")` }}
-        />
-        
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-900/20 via-transparent to-cyan-900/20 animate-pulse" 
-               style={{ animationDuration: '8s' }} />
-          <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-pink-900/10 to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-gradient-to-tr from-blue-900/10 to-transparent rounded-full blur-3xl" />
-        </div>
-
-        {/* Floating orbs */}
-        {Array.from({ length: 8 }, (_, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full bg-gradient-to-r from-purple-400/10 to-cyan-400/10 animate-pulse blur-sm"
-            style={{
-              width: `${20 + Math.random() * 30}px`,
-              height: `${20 + Math.random() * 30}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-              animationDuration: `${4 + Math.random() * 4}s`
-            }}
-          />
-        ))}
-      </div>
-      
       {/* Header */}
       <header className="relative z-20">
-        <nav 
+        <nav
           className="flex items-center justify-between px-8 py-6 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
           style={{
             backdropFilter: `blur(${Math.min(scrollY / 8, 20)}px)`,
@@ -100,10 +68,10 @@ const Home = () => {
 
           {/* Navigation */}
           <div className="hidden xl:flex items-center space-x-8">
-                          {['How it Works', 'Marketplace', 'Analytics', 'Security'].map((item, index) => (
+            {['How it Works', 'Marketplace', 'Analytics', 'Security'].map((item, index) => (
               <div key={item} className="relative group cursor-pointer">
-                <a 
-                  href="#" 
+                <a
+                  href="#"
                   className="text-gray-300 hover:text-white transition-all duration-300 font-medium relative py-2 px-4 rounded-lg hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-cyan-500/10"
                 >
                   {item}
@@ -118,7 +86,6 @@ const Home = () => {
 
           {/* Action buttons */}
           <div className="flex items-center space-x-4">
-            
             <button className="relative bg-gradient-to-r from-purple-600 via-purple-700 to-cyan-600 text-white px-8 py-3 rounded-xl hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/40 hover:shadow-xl hover:shadow-purple-500/60 font-bold group overflow-hidden cursor-pointer border border-purple-500/30 hover:border-purple-400/50">
               <span className="relative z-10 flex items-center space-x-2">
                 <span>Connect Wallet</span>
@@ -140,10 +107,9 @@ const Home = () => {
               <div className="flex items-center space-x-3">
                 <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
                 <span className="text-purple-300 font-medium">⚡ Powered by Chainlink</span>
-              
               </div>
             </div>
-            
+
             {/* Main Hero Text */}
             <div className="mb-16 space-y-6">
               <h1 className="text-5xl md:text-7xl font-black leading-tight tracking-tighter">
@@ -154,18 +120,18 @@ const Home = () => {
                   into Liquid Assets
                 </div>
               </h1>
-              
+
               <div className="space-y-4 max-w-4xl mx-auto">
                 <p className="text-2xl md:text-3xl text-gray-200 font-light leading-relaxed">
                   Next-Generation Decentralized Invoice Financing
                 </p>
                 <p className="text-lg text-gray-400 leading-relaxed max-w-3xl mx-auto">
-                  Unlock instant liquidity from your invoices with AI-powered verification, 
+                  Unlock instant liquidity from your invoices with AI-powered verification,
                   institutional-grade security, and automated smart contract execution
                 </p>
               </div>
             </div>
-            
+
             {/* CTA Section */}
             <div className="flex flex-col lg:flex-row gap-6 justify-center items-center mb-16">
               <button className="relative group bg-gradient-to-r from-purple-600 via-purple-700 to-cyan-600 text-white px-12 py-4 rounded-xl hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-xl shadow-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/70 font-bold text-lg overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60">
@@ -177,14 +143,14 @@ const Home = () => {
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-400/0 via-pink-400/0 to-cyan-400/0 group-hover:from-purple-400/30 group-hover:via-pink-400/30 group-hover:to-cyan-400/30 rounded-xl transition-all duration-500" />
                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-600 rounded-xl blur opacity-0 group-hover:opacity-30 transition-all duration-500 -z-10" />
               </button>
-              
+
               <button className="group bg-gray-800/60 backdrop-blur-xl border border-gray-600/50 text-white px-12 py-4 rounded-xl hover:bg-gray-700/60 hover:border-gray-500/60 transition-all duration-300 font-bold text-lg flex items-center space-x-3 cursor-pointer hover:shadow-lg hover:shadow-gray-500/20 relative overflow-hidden">
-  <span>🔍 Join Platform</span>
-  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-all duration-300 group-hover:scale-110">
-    <span className="text-xs">→</span>
-  </div>
-  <div className="absolute inset-0 bg-gradient-to-r from-gray-600/0 to-gray-400/0 group-hover:from-gray-600/10 group-hover:to-gray-400/10 rounded-xl transition-all duration-300" />
-</button>
+                <span>🔍 Join Platform</span>
+                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-all duration-300 group-hover:scale-110">
+                  <span className="text-xs">→</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-gray-600/0 to-gray-400/0 group-hover:from-gray-600/10 group-hover:to-gray-400/10 rounded-xl transition-all duration-300" />
+              </button>
             </div>
 
             {/* Live stats */}
@@ -216,45 +182,46 @@ const Home = () => {
           </div>
         </section>
 
-   {/* Platform Overview */}
-<section className="px-8 mb-20">
-  <div className="max-w-5xl mx-auto">
-    <div className="bg-gradient-to-r from-emerald-900/40 via-cyan-900/40 to-emerald-900/40 backdrop-blur-2xl border border-emerald-500/40 rounded-2xl p-8 group hover:border-emerald-400/60 transition-all duration-500 shadow-xl shadow-emerald-500/20">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center space-x-3">
-          <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse" />
-          <span className="text-emerald-400 font-bold text-lg">🔗 Connected to InvoiceFinance</span>
-        </div>
-        <div className="bg-gray-800/60 px-4 py-2 rounded-lg border border-gray-600/50">
-          <span className="text-gray-300 font-mono text-sm">0x742d35Cc...9A4C</span>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="text-center">
-          <div className="text-gray-400 font-medium mb-2">Your Invoices</div>
-          <div className="text-white font-black text-3xl">47</div>
-          <div className="text-gray-400">Active & Completed</div>
-        </div>
-        <div className="text-center">
-          <div className="text-gray-400 font-medium mb-2">Total Value</div>
-          <div className="text-cyan-400 font-black text-3xl">$284K</div>
-          <div className="text-cyan-400">Invoice Volume</div>
-        </div>
-        <div className="text-center">
-          <div className="text-gray-400 font-medium mb-2">Platform Fees</div>
-          <div className="text-green-400 font-black text-3xl">$127</div>
-          <div className="text-green-400">Total Paid</div>
-        </div>
-        <div className="text-center">
-          <div className="text-gray-400 font-medium mb-2">Account Status</div>
-          <div className="text-emerald-400 font-black text-3xl">✓ Active</div>
-          <div className="text-emerald-400">Verified User</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+        {/* Platform Overview */}
+        <section className="px-8 mb-20">
+          <div className="max-w-5xl mx-auto">
+            <div className="bg-gradient-to-r from-emerald-900/40 via-cyan-900/40 to-emerald-900/40 backdrop-blur-2xl border border-emerald-500/40 rounded-2xl p-8 group hover:border-emerald-400/60 transition-all duration-500 shadow-xl shadow-emerald-500/20">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center space-x-3">
+                  <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse" />
+                  <span className="text-emerald-400 font-bold text-lg">🔗 Connected to InvoiceFinance</span>
+                </div>
+                <div className="bg-gray-800/60 px-4 py-2 rounded-lg border border-gray-600/50">
+                  <span className="text-gray-300 font-mono text-sm">0x742d35Cc...9A4C</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="text-center">
+                  <div className="text-gray-400 font-medium mb-2">Your Invoices</div>
+                  <div className="text-white font-black text-3xl">47</div>
+                  <div className="text-gray-400">Active & Completed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-gray-400 font-medium mb-2">Total Value</div>
+                  <div className="text-cyan-400 font-black text-3xl">$284K</div>
+                  <div className="text-cyan-400">Invoice Volume</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-gray-400 font-medium mb-2">Platform Fees</div>
+                  <div className="text-green-400 font-black text-3xl">$127</div>
+                  <div className="text-green-400">Total Paid</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-gray-400 font-medium mb-2">Account Status</div>
+                  <div className="text-emerald-400 font-black text-3xl">✓ Active</div>
+                  <div className="text-emerald-400">Verified User</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Role Selection */}
         <section className="px-8 py-20">
           <div className="max-w-7xl mx-auto">
@@ -266,7 +233,7 @@ const Home = () => {
                 Select your role and unlock the power of decentralized invoice financing
               </p>
             </div>
-            
+
             <div className="grid lg:grid-cols-3 gap-8">
               {[
                 {
@@ -276,7 +243,7 @@ const Home = () => {
                   description: "Transform your outstanding invoices into immediate working capital",
                   features: [
                     "Instant liquidity access",
-                    "Real-time ERP integration", 
+                    "Real-time ERP integration",
                     "Automated smart contracts",
                     "Multi-currency support"
                   ],
@@ -288,7 +255,7 @@ const Home = () => {
                   cta: "Start Financing"
                 },
                 {
-                  icon: "💳", 
+                  icon: "💳",
                   title: "Buyer",
                   subtitle: "For Enterprises",
                   description: "Manage invoice payments with advanced automation and tracking",
@@ -307,7 +274,7 @@ const Home = () => {
                 },
                 {
                   icon: "💰",
-                  title: "Investor", 
+                  title: "Investor",
                   subtitle: "For Capital",
                   description: "Earn yields by investing in tokenized invoice assets",
                   features: [
@@ -324,7 +291,7 @@ const Home = () => {
                   cta: "Start Investing"
                 }
               ].map((role, index) => (
-                <div 
+                <div
                   key={index}
                   className={`relative bg-gradient-to-br ${role.gradient} backdrop-blur-2xl border ${role.border} ${role.hoverBorder} rounded-3xl p-8 hover:transform hover:scale-[1.02] transition-all duration-500 cursor-pointer group ${activeRole === role.role ? 'ring-2 ring-white/60 scale-[1.02]' : ''} overflow-hidden`}
                   onClick={() => handleRoleSelection(role.role)}
@@ -332,7 +299,7 @@ const Home = () => {
                   <div className="absolute inset-0 opacity-5">
                     <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
                   </div>
-                  
+
                   <div className="relative z-10">
                     <div className="text-center mb-8">
                       <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
@@ -378,10 +345,10 @@ const Home = () => {
                 Four seamless steps to transform invoices into tradeable digital assets
               </p>
             </div>
-            
+
             <div className="relative">
               <div className="hidden lg:block absolute top-1/2 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500/50 via-cyan-500/50 to-purple-500/50 transform -translate-y-1/2" />
-              
+
               <div className="grid lg:grid-cols-4 gap-8">
                 {[
                   {
@@ -392,7 +359,7 @@ const Home = () => {
                     color: "from-blue-500 to-cyan-500"
                   },
                   {
-                    number: "02", 
+                    number: "02",
                     title: "Verify & Tokenize",
                     description: "Smart contracts verify authenticity and convert invoices into tradeable tokens",
                     icon: "🔍",
@@ -407,7 +374,7 @@ const Home = () => {
                   },
                   {
                     number: "04",
-                    title: "Collect & Distribute", 
+                    title: "Collect & Distribute",
                     description: "Automated systems collect payments and distribute returns to all stakeholders",
                     icon: "💎",
                     color: "from-orange-500 to-red-500"
@@ -418,15 +385,15 @@ const Home = () => {
                       <div className="text-5xl mb-6 text-center group-hover:scale-110 transition-transform duration-300">
                         {step.icon}
                       </div>
-                      
+
                       <div className={`w-16 h-16 bg-gradient-to-r ${step.color} rounded-xl flex items-center justify-center text-lg font-black text-white mx-auto mb-6 group-hover:shadow-lg transition-all duration-300`}>
                         {step.number}
                       </div>
-                      
+
                       <h4 className="text-xl font-black text-white mb-4 text-center">{step.title}</h4>
                       <p className="text-gray-400 leading-relaxed font-medium text-center text-sm">{step.description}</p>
                     </div>
-                    
+
                     <div className="hidden lg:block absolute top-1/2 -right-4 w-4 h-4 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full transform -translate-y-1/2 z-10 shadow-lg shadow-purple-500/50" />
                   </div>
                 ))}
@@ -436,50 +403,50 @@ const Home = () => {
         </section>
       </main>
 
-{/* Footer */}
-<footer className="relative z-10 mt-20 border-t border-gray-700/30 bg-gray-900/60 backdrop-blur-xl">
-  <div className="max-w-7xl mx-auto px-8 py-12">
-    {/* Main content */}
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-      
-      {/* Brand */}
-      <div>
-        <h3 className="text-xl font-bold text-white mb-3">InvoiceFinance Protocol</h3>
-        <p className="text-gray-400 text-sm">Revolutionizing DeFi Infrastructure</p>
-      </div>
-      
-      {/* Features */}
-      <div>
-        <h4 className="text-white font-medium mb-4">Features</h4>
-        <div className="space-y-2.5">
-          <div className="text-gray-400 text-sm">Invoice Factoring</div>
-          <div className="text-gray-400 text-sm">Liquidity Pools</div>
-          <div className="text-gray-400 text-sm">Risk Assessment</div>
+      {/* Footer */}
+      <footer className="relative z-10 mt-20 border-t border-gray-700/30 bg-gray-900/60 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-8 py-12">
+          {/* Main content */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+
+            {/* Brand */}
+            <div>
+              <h3 className="text-xl font-bold text-white mb-3">InvoiceFinance Protocol</h3>
+              <p className="text-gray-400 text-sm">Revolutionizing DeFi Infrastructure</p>
+            </div>
+
+            {/* Features */}
+            <div>
+              <h4 className="text-white font-medium mb-4">Features</h4>
+              <div className="space-y-2.5">
+                <div className="text-gray-400 text-sm">Invoice Factoring</div>
+                <div className="text-gray-400 text-sm">Liquidity Pools</div>
+                <div className="text-gray-400 text-sm">Risk Assessment</div>
+              </div>
+            </div>
+
+            {/* Tech stack */}
+            <div>
+              <h4 className="text-white font-medium mb-4">Built With</h4>
+              <div className="flex items-center space-x-4">
+                <span className="text-gray-400 text-sm">Ethereum</span>
+                <span className="text-gray-500">•</span>
+                <span className="text-gray-400 text-sm">Chainlink</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Copyright */}
+          <div className="pt-8 border-t border-gray-700/30 text-center">
+            <div className="text-gray-400 font-medium mb-2">
+              © 2024 InvoiceFinance Protocol
+            </div>
+            <div className="text-gray-500 text-sm">
+              Building the Future of Decentralized Finance
+            </div>
+          </div>
         </div>
-      </div>
-      
-      {/* Tech stack */}
-      <div>
-        <h4 className="text-white font-medium mb-4">Built With</h4>
-        <div className="flex items-center space-x-4">
-          <span className="text-gray-400 text-sm">Ethereum</span>
-          <span className="text-gray-500">•</span>
-          <span className="text-gray-400 text-sm">Chainlink</span>
-        </div>
-      </div>
-    </div>
-    
-    {/* Copyright */}
-    <div className="pt-8 border-t border-gray-700/30 text-center">
-      <div className="text-gray-400 font-medium mb-2">
-        © 2024 InvoiceFinance Protocol
-      </div>
-      <div className="text-gray-500 text-sm">
-        Building the Future of Decentralized Finance
-      </div>
-    </div>
-  </div>
-</footer>
+      </footer>
     </div>
   );
 };
