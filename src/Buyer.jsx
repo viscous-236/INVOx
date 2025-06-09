@@ -306,8 +306,8 @@ const BuyerMarketplace = () => {
               key={filter.key}
               onClick={() => setFilterStatus(filter.key)}
               className={`px-8 py-3 rounded-xl font-bold transition-all duration-300 ${filterStatus === filter.key
-                ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30'
-                : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl'
+                ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
+                : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl cursor-pointer'
                 }`}
             >
               {filter.label} ({filter.count})
