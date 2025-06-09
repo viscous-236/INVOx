@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
   const [activeRole, setActiveRole] = useState(null);
   const [scrollY, setScrollY] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -22,7 +24,7 @@ const Home = () => {
 
   const handleRoleSelection = (role) => {
     setActiveRole(role);
-    // navigate(`/${role}`);
+    navigate(`/${role}`); // Uncommented this line
   };
 
   return (
@@ -294,7 +296,7 @@ const Home = () => {
                 <div
                   key={index}
                   className={`relative bg-gradient-to-br ${role.gradient} backdrop-blur-2xl border ${role.border} ${role.hoverBorder} rounded-3xl p-8 hover:transform hover:scale-[1.02] transition-all duration-500 cursor-pointer group ${activeRole === role.role ? 'ring-2 ring-white/60 scale-[1.02]' : ''} overflow-hidden`}
-                  onClick={() => handleRoleSelection(role.role)}
+                  
                 >
                   <div className="absolute inset-0 opacity-5">
                     <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
@@ -322,11 +324,16 @@ const Home = () => {
                       ))}
                     </div>
 
-                    <button className={`w-full bg-gradient-to-r from-${role.accent}-600/60 to-${role.accent}-500/60 backdrop-blur-sm text-white border border-${role.accent}-400/40 rounded-xl py-4 hover:from-${role.accent}-500/70 hover:to-${role.accent}-400/70 hover:border-${role.accent}-300/60 transition-all duration-300 font-bold group-hover:shadow-xl group-hover:shadow-${role.accent}-500/30 relative overflow-hidden cursor-pointer hover:scale-[1.02]`}>
-                      <span className="relative z-10">{role.cta}</span>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-                      <div className={`absolute -inset-1 bg-gradient-to-r from-${role.accent}-500 to-${role.accent}-400 rounded-xl blur opacity-0 group-hover:opacity-20 transition-all duration-500 -z-10`} />
-                    </button>
+                    <button 
+  onClick={(e) => {
+    e.stopPropagation(); // Prevent card click
+    handleRoleSelection(role.role);
+  }}
+  className={`w-full bg-gradient-to-r from-${role.accent}-600/60 to-${role.accent}-500/60 backdrop-blur-sm text-white border border-${role.accent}-400/40 rounded-xl py-4 hover:from-${role.accent}-500/70 hover:to-${role.accent}-400/70 hover:border-${role.accent}-300/60 transition-all duration-300 font-bold group-hover:shadow-xl group-hover:shadow-${role.accent}-500/30 relative overflow-hidden cursor-pointer hover:scale-[1.02]`}>
+  <span className="relative z-10">{role.cta}</span>
+  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+  <div className={`absolute -inset-1 bg-gradient-to-r from-${role.accent}-500 to-${role.accent}-400 rounded-xl blur opacity-0 group-hover:opacity-20 transition-all duration-500 -z-10`} />
+</button>
                   </div>
                 </div>
               ))}
