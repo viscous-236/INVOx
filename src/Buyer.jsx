@@ -11,12 +11,12 @@ const BuyerMarketplace = () => {
     const handleMouseMove = (e) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
     };
-    
+
     const handleScroll = () => setScrollY(window.scrollY);
-    
+
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('scroll', handleScroll);
-    
+
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('scroll', handleScroll);
@@ -116,7 +116,7 @@ const BuyerMarketplace = () => {
 
     // Simulate payment processing
     console.log(`Processing payment of ${paymentAmount} for Invoice #${selectedInvoice.id}`);
-    
+
     // Show success message and close modal
     alert(`Payment of ${parseFloat(paymentAmount).toLocaleString()} processed successfully!`);
     setSelectedInvoice(null);
@@ -129,7 +129,7 @@ const BuyerMarketplace = () => {
       'Overdue': 'bg-red-500/20 text-red-400 border-red-500/40',
       'Paid': 'bg-blue-500/20 text-blue-400 border-blue-500/40'
     };
-    
+
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusStyles[status]}`}>
         {status}
@@ -145,12 +145,14 @@ const BuyerMarketplace = () => {
     return diffDays > 0 ? diffDays : 0;
   };
 
-  const hexPattern = "data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234f46e5' fill-opacity='0.03'%3E%3Cpath d='M60 0l30 17.32v34.64L60 69.28 30 52V17.32L60 0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E";
-
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-950 via-gray-900 to-black">
+    <div className="min-h-screen relative overflow-hidden bg-black">
+      {/* New Background Pattern - matching Home.jsx */}
+      <div className="absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
+      <div className="absolute left-0 right-0 top-[-10%] h-[1000px] w-[1000px] rounded-full bg-[radial-gradient(circle_400px_at_50%_300px,#fbfbfb36,#000)] mx-auto"></div>
+
       {/* Dynamic cursor effect */}
-      <div 
+      <div
         className="fixed w-96 h-96 pointer-events-none z-0 opacity-20 transition-all duration-1000 ease-out"
         style={{
           background: 'radial-gradient(circle, rgba(147, 51, 234, 0.1) 0%, transparent 70%)',
@@ -159,40 +161,9 @@ const BuyerMarketplace = () => {
         }}
       />
 
-      {/* Background layers */}
-      <div className="fixed inset-0 z-0">
-        <div 
-          className="absolute inset-0 opacity-40"
-          style={{ backgroundImage: `url("${hexPattern}")` }}
-        />
-        
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-900/20 via-transparent to-cyan-900/20 animate-pulse" 
-               style={{ animationDuration: '8s' }} />
-          <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-pink-900/10 to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-gradient-to-tr from-blue-900/10 to-transparent rounded-full blur-3xl" />
-        </div>
-
-        {/* Floating orbs */}
-        {Array.from({ length: 8 }, (_, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full bg-gradient-to-r from-purple-400/10 to-cyan-400/10 animate-pulse blur-sm"
-            style={{
-              width: `${20 + Math.random() * 30}px`,
-              height: `${20 + Math.random() * 30}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-              animationDuration: `${4 + Math.random() * 4}s`
-            }}
-          />
-        ))}
-      </div>
-
       {/* Header */}
       <header className="relative z-20">
-        <nav 
+        <nav
           className="flex items-center justify-between px-8 py-6 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
           style={{
             backdropFilter: `blur(${Math.min(scrollY / 8, 20)}px)`,
@@ -219,8 +190,8 @@ const BuyerMarketplace = () => {
           <div className="hidden xl:flex items-center space-x-8">
             {['Dashboard', 'Invoices', 'Analytics', 'Settings'].map((item, index) => (
               <div key={item} className="relative group cursor-pointer">
-                <a 
-                  href="#" 
+                <a
+                  href="#"
                   className="text-gray-300 hover:text-white transition-all duration-300 font-medium relative py-2 px-4 rounded-lg hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-cyan-500/10"
                 >
                   {item}
@@ -245,7 +216,7 @@ const BuyerMarketplace = () => {
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-8 py-12">
-        
+
         {/* Page Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
@@ -259,55 +230,55 @@ const BuyerMarketplace = () => {
         {/* Stats Cards - Demo Cards Style */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
           {[
-            { 
-              value: stats.overdueCount, 
-              label: "Overdue", 
-              change: "Requires attention", 
+            {
+              value: stats.overdueCount,
+              label: "Overdue",
+              change: "Requires attention",
               icon: "⚠️",
-              gradient: "from-red-600/30 to-orange-600/30",
+              gradient: "from-red-200/1 to-orange-700/20",
               border: "border-red-500/40",
               hoverBorder: "hover:border-red-400/70",
               accent: "red"
             },
-            { 
-              value: stats.approvedCount, 
-              label: "Approved", 
-              change: "Ready to pay", 
+            {
+              value: stats.approvedCount,
+              label: "Approved",
+              change: "Ready to pay",
               icon: "✅",
-              gradient: "from-emerald-600/30 to-green-600/30",
+              gradient: "from-emerald-200/1 to-green-700/20",
               border: "border-emerald-500/40",
               hoverBorder: "hover:border-emerald-400/70",
               accent: "emerald"
             },
-            { 
-              value: `$${stats.totalPending.toLocaleString()}`, 
-              label: "Total Due", 
-              change: "Outstanding amount", 
+            {
+              value: `$${stats.totalPending.toLocaleString()}`,
+              label: "Total Due",
+              change: "Outstanding amount",
               icon: "💰",
-              gradient: "from-cyan-600/30 to-blue-600/30",
+              gradient: "from-cyan-200/1 to-blue-700/15",
               border: "border-cyan-500/40",
               hoverBorder: "hover:border-cyan-400/70",
               accent: "cyan"
             },
-            { 
-              value: `$${stats.totalPenalties.toLocaleString()}`, 
-              label: "Penalties", 
-              change: "Late fees", 
+            {
+              value: `$${stats.totalPenalties.toLocaleString()}`,
+              label: "Penalties",
+              change: "Late fees",
               icon: "📈",
-              gradient: "from-orange-600/30 to-yellow-600/30",
+              gradient: "from-orange-200/1 to-orange-700/20",
               border: "border-orange-500/40",
               hoverBorder: "hover:border-orange-400/70",
               accent: "orange"
             }
           ].map((stat, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className={`relative bg-gradient-to-br ${stat.gradient} backdrop-blur-2xl border ${stat.border} ${stat.hoverBorder} rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden`}
             >
               <div className="absolute inset-0 opacity-5">
                 <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
               </div>
-              
+
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-gray-300 text-sm font-medium">{stat.label}</span>
@@ -334,11 +305,10 @@ const BuyerMarketplace = () => {
             <button
               key={filter.key}
               onClick={() => setFilterStatus(filter.key)}
-              className={`px-8 py-3 rounded-xl font-bold transition-all duration-300 ${
-                filterStatus === filter.key
-                  ? 'bg-gradient-to-r from-purple-600/60 to-cyan-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30'
-                  : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl'
-              }`}
+              className={`px-8 py-3 rounded-xl font-bold transition-all duration-300 ${filterStatus === filter.key
+                ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30'
+                : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl'
+                }`}
             >
               {filter.label} ({filter.count})
             </button>
@@ -350,16 +320,15 @@ const BuyerMarketplace = () => {
           {filteredInvoices.map((invoice) => (
             <div
               key={invoice.id}
-              className={`relative backdrop-blur-2xl border rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden ${
-                invoice.status === 'Overdue' 
-                  ? 'bg-gradient-to-br from-red-600/20 to-orange-600/20 border-red-500/40 hover:border-red-400/70 hover:shadow-xl hover:shadow-red-500/30' 
-                  : 'bg-gradient-to-br from-gray-800/40 to-gray-700/40 border-gray-700/50 hover:border-gray-600/70 hover:shadow-xl hover:shadow-purple-500/20'
-              }`}
+              className={`relative backdrop-blur-2xl border rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden ${invoice.status === 'Overdue'
+                ? 'bg-gradient-to-br from-red-100/1 to-orange-700/15 border-red-500/40 hover:border-red-400/70 hover:shadow-xl hover:shadow-red-500/30'
+                : 'bg-gradient-to-br from-gray-800/40 to-gray-700/40 border-gray-700/50 hover:border-gray-600/70 hover:shadow-xl hover:shadow-purple-500/20'
+                }`}
             >
               <div className="absolute inset-0 opacity-5">
                 <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
               </div>
-              
+
               <div className="relative z-10">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
@@ -417,7 +386,7 @@ const BuyerMarketplace = () => {
                 {/* Action Button */}
                 <button
                   onClick={() => handlePayInvoice(invoice)}
-                  className="w-full relative bg-gradient-to-r from-purple-600 via-purple-700 to-cyan-600 text-white py-3 rounded-xl hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
+                  className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
                 >
                   <span className="relative z-10 flex items-center justify-center space-x-2">
                     <span>💳</span>
@@ -444,7 +413,7 @@ const BuyerMarketplace = () => {
                 ✕
               </button>
             </div>
-            
+
             <div className="space-y-4 mb-6">
               <div className="flex justify-between p-3 bg-white/5 rounded-lg">
                 <span className="text-gray-400 font-medium">Invoice #</span>
@@ -469,7 +438,7 @@ const BuyerMarketplace = () => {
                 <span className="text-cyan-400">${selectedInvoice.totalDue.toLocaleString()}</span>
               </div>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <div className="block text-gray-400 text-sm mb-2 font-medium">Payment Amount (USD)</div>
@@ -480,7 +449,7 @@ const BuyerMarketplace = () => {
                   className="w-full bg-gray-700/50 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-purple-500 focus:outline-none font-bold text-lg"
                 />
               </div>
-              
+
               <div className="flex space-x-4">
                 <button
                   onClick={() => setSelectedInvoice(null)}

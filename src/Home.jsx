@@ -88,13 +88,14 @@ const Home = () => {
 
           {/* Action buttons */}
           <div className="flex items-center space-x-4">
-            <button className="relative bg-gradient-to-r from-purple-600 via-purple-700 to-cyan-600 text-white px-8 py-3 rounded-xl hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/40 hover:shadow-xl hover:shadow-purple-500/60 font-bold group overflow-hidden cursor-pointer border border-purple-500/30 hover:border-purple-400/50">
+            <button className="relative bg-gradient-to-r from-black via-purple-900/45 to-cyan-600/30 text-white px-8 py-3 rounded-xl hover:from-purple-900/45 hover:via-black hover:to-cyan-600/30 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/40 hover:shadow-xl hover:shadow-purple-500/60 font-bold group overflow-hidden cursor-pointer border border-purple-500/30 hover:border-purple-400/50">
+
               <span className="relative z-10 flex items-center space-x-2">
                 <span>Connect Wallet</span>
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
               </span>
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-400/0 via-pink-400/0 to-cyan-400/0 group-hover:from-purple-400/20 group-hover:via-pink-400/20 group-hover:to-cyan-400/20 rounded-xl transition-all duration-500" />
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-400/0 via-pink-400/0 to-cyan-400/0 group-hover:from-purple-400/20 group-hover:via-black-400/20 group-hover:to-cyan-400/20 rounded-xl transition-all duration-500" />
             </button>
           </div>
         </nav>
@@ -136,14 +137,14 @@ const Home = () => {
 
             {/* CTA Section */}
             <div className="flex flex-col lg:flex-row gap-6 justify-center items-center mb-16">
-              <button className="relative group bg-gradient-to-r from-purple-600 via-purple-700 to-cyan-600 text-white px-12 py-4 rounded-xl hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-xl shadow-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/70 font-bold text-lg overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60">
+              <button className="relative group bg-gradient-to-r from-black via-purple-900/45 to-cyan-600/30 text-white px-12 py-4 rounded-xl hover:from-black hover:via-black hover:to-black transition-all duration-300 transform hover:scale-105 shadow-xl shadow-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/70 font-bold text-lg overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60">
                 <span className="relative z-10 flex items-center space-x-2">
                   <span>🚀 Start Investing Now</span>
                   <div className="w-2 h-2 bg-cyan-300 rounded-full animate-pulse group-hover:animate-ping" />
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-400/0 via-pink-400/0 to-cyan-400/0 group-hover:from-purple-400/30 group-hover:via-pink-400/30 group-hover:to-cyan-400/30 rounded-xl transition-all duration-500" />
-                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-600 rounded-xl blur opacity-0 group-hover:opacity-30 transition-all duration-500 -z-10" />
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-400/0 via-pink-400/0 to-cyan-400/0 group-hover:from-purple-400/30 group-hover:via-pink-700/5 group-hover:to-cyan-400/30 rounded-xl transition-all duration-500" />
+                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/50 via-black-600 to-cyan-800/5 rounded-xl blur opacity-0 group-hover:opacity-30 transition-all duration-500 -z-10" />
               </button>
 
               <button className="group bg-gray-800/60 backdrop-blur-xl border border-gray-600/50 text-white px-12 py-4 rounded-xl hover:bg-gray-700/60 hover:border-gray-500/60 transition-all duration-300 font-bold text-lg flex items-center space-x-3 cursor-pointer hover:shadow-lg hover:shadow-gray-500/20 relative overflow-hidden">
@@ -296,7 +297,7 @@ const Home = () => {
                 <div
                   key={index}
                   className={`relative bg-gradient-to-br ${role.gradient} backdrop-blur-2xl border ${role.border} ${role.hoverBorder} rounded-3xl p-8 hover:transform hover:scale-[1.02] transition-all duration-500 cursor-pointer group ${activeRole === role.role ? 'ring-2 ring-white/60 scale-[1.02]' : ''} overflow-hidden`}
-                  
+
                 >
                   <div className="absolute inset-0 opacity-5">
                     <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
@@ -324,16 +325,16 @@ const Home = () => {
                       ))}
                     </div>
 
-                    <button 
-  onClick={(e) => {
-    e.stopPropagation(); // Prevent card click
-    handleRoleSelection(role.role);
-  }}
-  className={`w-full bg-gradient-to-r from-${role.accent}-600/60 to-${role.accent}-500/60 backdrop-blur-sm text-white border border-${role.accent}-400/40 rounded-xl py-4 hover:from-${role.accent}-500/70 hover:to-${role.accent}-400/70 hover:border-${role.accent}-300/60 transition-all duration-300 font-bold group-hover:shadow-xl group-hover:shadow-${role.accent}-500/30 relative overflow-hidden cursor-pointer hover:scale-[1.02]`}>
-  <span className="relative z-10">{role.cta}</span>
-  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-  <div className={`absolute -inset-1 bg-gradient-to-r from-${role.accent}-500 to-${role.accent}-400 rounded-xl blur opacity-0 group-hover:opacity-20 transition-all duration-500 -z-10`} />
-</button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent card click
+                        handleRoleSelection(role.role);
+                      }}
+                      className={`w-full bg-gradient-to-r from-${role.accent}-600/60 to-${role.accent}-500/60 backdrop-blur-sm text-white border border-${role.accent}-400/40 rounded-xl py-4 hover:from-${role.accent}-500/70 hover:to-${role.accent}-400/70 hover:border-${role.accent}-300/60 transition-all duration-300 font-bold group-hover:shadow-xl group-hover:shadow-${role.accent}-500/30 relative overflow-hidden cursor-pointer hover:scale-[1.02]`}>
+                      <span className="relative z-10">{role.cta}</span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+                      <div className={`absolute -inset-1 bg-gradient-to-r from-${role.accent}-500 to-${role.accent}-400 rounded-xl blur opacity-0 group-hover:opacity-20 transition-all duration-500 -z-10`} />
+                    </button>
                   </div>
                 </div>
               ))}
