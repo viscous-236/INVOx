@@ -144,7 +144,7 @@ const UnifiedSupplierDashboard = () => {
         {/* Title */}
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
-            Supplier Dashboard
+            Collection Dashboard
           </h1>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
             Transform your invoices into liquid assets with instant funding
@@ -197,7 +197,7 @@ const UnifiedSupplierDashboard = () => {
           ].map((stat, index) => (
             <div
               key={index}
-              className={`relative bg-gradient-to-br ${stat.gradient} backdrop-blur-2xl border ${stat.border} ${stat.hoverBorder} rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden cursor-pointer`}
+              className={`relative bg-gradient-to-br ${stat.gradient} backdrop-blur-2xl border ${stat.border} ${stat.hoverBorder} rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden `}
             >
               <div className="absolute inset-0 opacity-5">
                 <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />

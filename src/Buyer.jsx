@@ -186,24 +186,7 @@ const BuyerMarketplace = () => {
             </div>
           </div>
 
-          {/* Navigation */}
-          <div className="hidden xl:flex items-center space-x-8">
-            {['Dashboard', 'Invoices', 'Analytics', 'Settings'].map((item, index) => (
-              <div key={item} className="relative group cursor-pointer">
-                <a
-                  href="#"
-                  className="text-gray-300 hover:text-white transition-all duration-300 font-medium relative py-2 px-4 rounded-lg hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-cyan-500/10"
-                >
-                  {item}
-                  <span className="absolute -bottom-2 left-4 w-0 h-0.5 bg-gradient-to-r from-purple-500 to-cyan-500 transition-all duration-300 group-hover:w-[calc(100%-2rem)]" />
-                </a>
-                {index === 1 && (
-                  <div className="absolute -top-2 -right-2 w-2 h-2 bg-red-400 rounded-full animate-pulse" />
-                )}
-              </div>
-            ))}
-          </div>
-
+          
           {/* Action buttons */}
           <div className="flex items-center space-x-4">
             <div className="text-gray-400 text-sm">
@@ -219,8 +202,8 @@ const BuyerMarketplace = () => {
 
         {/* Page Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
-            Invoice Marketplace
+          <h1 className="text-4zl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
+            Settlement Dashboard
           </h1>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
             Manage and pay your outstanding invoices with automated smart contract execution
