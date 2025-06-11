@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Investor = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -7,6 +8,8 @@ const Investor = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [scrollY, setScrollY] = useState(0);
   const [showPayments, setShowPayments] = useState(false);
+  const [account, setAccount] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -23,6 +26,58 @@ const Investor = () => {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  useEffect(() => {
+    getConnectedAccount();
+  }, []);
+
+  useEffect(() => {
+    const handleAccountsChanged = (accounts) => {
+      if (accounts.length === 0) {
+        console.log("Account: Disconnected");
+        setAccount(null);
+        navigate("/");
+      } else {
+        const newAccount = accounts[0];
+        if (newAccount !== account) {
+          console.log("Account changed:", newAccount);
+          setAccount(newAccount);
+          navigate("/");
+        }
+      }
+    };
+
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      }
+    };
+  }, [account, navigate]);
+
+  const getConnectedAccount = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          console.log("Retrieved connected account:", accounts[0]);
+        } else {
+          console.log("No connected accounts found");
+          navigate("/");
+        }
+      } catch (error) {
+        console.error('Error getting connected account:', error);
+        navigate("/");
+      }
+    } else {
+      alert('Please install MetaMask to connect your wallet.');
+      navigate("/");
+    }
+  };
 
   // Mock payment history data
   const [paymentHistory] = useState([
@@ -283,7 +338,7 @@ const Investor = () => {
               <span className="text-orange-300 text-xs font-bold">CHAINLINK ACTIVE</span>
             </div>
             <div className="text-gray-400 text-sm">
-              <span className="text-gray-300 font-medium">0x742d35Cc...9A4C</span>
+              <span className="text-gray-300 font-medium">{account}</span>
             </div>
           </div>
         </nav>
@@ -369,11 +424,10 @@ const Investor = () => {
             <button
               key={filter.key}
               onClick={() => setFilterStatus(filter.key)}
-              className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 ${
-                filterStatus === filter.key
-                  ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
+              className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 ${filterStatus === filter.key
+                ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
                 : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl cursor-pointer'
-              }`}
+                }`}
             >
               {filter.label} ({filter.count})
             </button>
@@ -414,7 +468,7 @@ const Investor = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-700/50 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-gradient-to-r from-purple-500 to-cyan-500 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${getFundingProgress(invoice.fundedAmount, invoice.amount)}%` }}
                       />
@@ -451,20 +505,19 @@ const Investor = () => {
                 <button
                   onClick={() => handleInvest(invoice)}
                   disabled={invoice.status === 'Paid'}
-                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-300 transform hover:scale-105 shadow-lg overflow-hidden border group ${
-                    invoice.status === 'Open' || invoice.status === 'Funding'
-                      ? "w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
-                      : invoice.status === 'Paid'
+                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-300 transform hover:scale-105 shadow-lg overflow-hidden border group ${invoice.status === 'Open' || invoice.status === 'Funding'
+                    ? "w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
+                    : invoice.status === 'Paid'
                       ? 'bg-gray-700/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
                       : 'bg-green-600/50 text-green-300 border-green-500/30 cursor-default'
-                  }`}
+                    }`}
                 >
                   <span className="relative z-10 flex items-center justify-center space-x-2">
                     <span>
                       {invoice.status === 'Open' ? '💎 Invest Now' :
-                       invoice.status === 'Funding' ? '⚡ Add Investment' :
-                       invoice.status === 'Funded' ? '✅ Fully Funded' :
-                       '✨ Paid by Buyer'}
+                        invoice.status === 'Funding' ? '⚡ Add Investment' :
+                          invoice.status === 'Funded' ? '✅ Fully Funded' :
+                            '✨ Paid by Buyer'}
                     </span>
                   </span>
                   {(invoice.status === 'Open' || invoice.status === 'Funding') && (
@@ -611,7 +664,7 @@ const Investor = () => {
               </button>
               <button
                 onClick={processInvestment}
-                  className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
+                className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
               >
                 Invest Now
               </button>

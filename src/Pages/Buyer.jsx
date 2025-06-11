@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
+
 
 const BuyerMarketplace = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -6,6 +9,8 @@ const BuyerMarketplace = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [filterStatus, setFilterStatus] = useState('all');
   const [scrollY, setScrollY] = useState(0);
+  const [account, setAccount] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -22,6 +27,58 @@ const BuyerMarketplace = () => {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  useEffect(() => {
+    getConnectedAccount();
+  }, []);
+
+  useEffect(() => {
+    const handleAccountsChanged = (accounts) => {
+      if (accounts.length === 0) {
+        console.log("Account: Disconnected");
+        setAccount(null);
+        navigate("/");
+      } else {
+        const newAccount = accounts[0];
+        if (newAccount !== account) {
+          console.log("Account changed:", newAccount);
+          setAccount(newAccount);
+          navigate("/");
+        }
+      }
+    };
+
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      }
+    };
+  }, [account, navigate]);
+
+  const getConnectedAccount = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          console.log("Retrieved connected account:", accounts[0]);
+        } else {
+          console.log("No connected accounts found");
+          navigate("/");
+        }
+      } catch (error) {
+        console.error('Error getting connected account:', error);
+        navigate("/");
+      }
+    } else {
+      alert('Please install MetaMask to connect your wallet.');
+      navigate("/");
+    }
+  };
 
   // Sample invoice data
   const [invoices] = useState([
@@ -186,11 +243,11 @@ const BuyerMarketplace = () => {
             </div>
           </div>
 
-          
+
           {/* Action buttons */}
           <div className="flex items-center space-x-4">
             <div className="text-gray-400 text-sm">
-              <span className="text-gray-300 font-medium">0x742d35Cc...9A4C</span>
+              <span className="text-gray-300 font-medium">{account}</span>
             </div>
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
           </div>

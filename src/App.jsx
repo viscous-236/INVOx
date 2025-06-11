@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
-import Home from './Home'
-import Buyer from './Buyer' // Make sure this component exists
+import Home from './Pages/Home'
+import Buyer from './Pages/Buyer' // Make sure this component exists
 import './App.css'
-import Supplier from './Supplier'
-import Investor from './Investor'
+import Supplier from './Pages/Supplier'
+import Investor from './Pages/Investor'
 
-// ScrollToTop component
+
 const ScrollToTop = () => {
   const { pathname } = useLocation();
 

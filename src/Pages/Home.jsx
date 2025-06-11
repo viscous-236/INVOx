@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
+import { getContract } from '../contract/Main';
+import { getReadOnlyContract } from '../contract/Main';
 
 const Home = () => {
   const [activeRole, setActiveRole] = useState(null);
   const [scrollY, setScrollY] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const navigate = useNavigate();
+  const [contract, setContract] = useState(null);
+  const [address, setAddress] = useState(null);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -22,9 +27,39 @@ const Home = () => {
     };
   }, []);
 
-  const handleRoleSelection = (role) => {
+
+  const connectWallet = async () => {
+    if (window.ethereum) {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        setAddress(address);
+        console.log("Connected address:", address);
+        const contractInstance = await getContract();
+        setContract(contractInstance);
+
+        const role = await contractInstance.getUserRole(address);
+        if (role !== 0) {
+          setActiveRole(role === 1 ? 'supplier' : role === 2 ? 'buyer' : 'investor');
+          navigate(`/${role === 1 ? 'supplier' : role === 2 ? 'buyer' : 'investor'}`);
+        } else {
+          navigate('/select-role');
+        }
+      } catch (error) {
+        console.error("Error connecting wallet:", error);
+        alert("Failed to connect wallet. Please try again.");
+      }
+    } else {
+      alert("Please install MetaMask to connect your wallet.");
+    }
+  }
+
+  const handleRoleSelection = async (role) => {
     setActiveRole(role);
-    navigate(`/${role}`); // Uncommented this line
+    // contract.chooseRole(role === 'supplier' ? 1 : role === 'buyer' ? 2 : 3);
+    navigate(`/${role}`);
   };
 
   return (
@@ -73,7 +108,7 @@ const Home = () => {
             {['How it Works', 'Marketplace', 'Analytics', 'Security'].map((item, index) => (
               <div key={item} className="relative group cursor-pointer">
                 <a
-                  href="#"
+                  href=""
                   className="text-gray-300 hover:text-white transition-all duration-300 font-medium relative py-2 px-4 rounded-lg hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-cyan-500/10"
                 >
                   {item}
@@ -88,7 +123,9 @@ const Home = () => {
 
           {/* Action buttons */}
           <div className="flex items-center space-x-4">
-            <button className="relative bg-gradient-to-r from-black via-purple-900/45 to-cyan-600/30 text-white px-8 py-3 rounded-xl hover:from-purple-900/45 hover:via-black hover:to-cyan-600/30 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/40 hover:shadow-xl hover:shadow-purple-500/60 font-bold group overflow-hidden cursor-pointer border border-purple-500/30 hover:border-purple-400/50">
+            <button
+              onClick={connectWallet}
+              className="relative bg-gradient-to-r from-black via-purple-900/45 to-cyan-600/30 text-white px-8 py-3 rounded-xl hover:from-purple-900/45 hover:via-black hover:to-cyan-600/30 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/40 hover:shadow-xl hover:shadow-purple-500/60 font-bold group overflow-hidden cursor-pointer border border-purple-500/30 hover:border-purple-400/50">
 
               <span className="relative z-10 flex items-center space-x-2">
                 <span>Connect Wallet</span>

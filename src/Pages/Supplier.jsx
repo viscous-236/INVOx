@@ -1,4 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { getContract, getReadOnlyContract } from '../contract/Main';
+import { useNavigate } from 'react-router-dom';
 
 const UnifiedSupplierDashboard = () => {
   const [scrollY, setScrollY] = useState(0);
@@ -9,6 +12,9 @@ const UnifiedSupplierDashboard = () => {
   const [verifyId, setVerifyId] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [account, setAccount] = useState(null);
+  const navigate = useNavigate();
+
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -18,12 +24,64 @@ const UnifiedSupplierDashboard = () => {
 
     window.addEventListener('scroll', handleScroll);
     window.addEventListener('mousemove', handleMouseMove);
-    
+
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('mousemove', handleMouseMove);
     };
   }, []);
+
+  useEffect(() => {
+    getConnectedAccount();
+  }, []);
+
+  useEffect(() => {
+    const handleAccountsChanged = (accounts) => {
+      if (accounts.length === 0) {
+        console.log("Account: Disconnected");
+        setAccount(null);
+        navigate("/");
+      } else {
+        const newAccount = accounts[0];
+        if (newAccount !== account) {
+          console.log("Account changed:", newAccount);
+          setAccount(newAccount);
+          navigate("/");
+        }
+      }
+    };
+
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      }
+    };
+  }, [account, navigate]);
+
+  const getConnectedAccount = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          console.log("Retrieved connected account:", accounts[0]);
+        } else {
+          console.log("No connected accounts found");
+          navigate("/");
+        }
+      } catch (error) {
+        console.error('Error getting connected account:', error);
+        navigate("/");
+      }
+    } else {
+      alert('Please install MetaMask to connect your wallet.');
+      navigate("/");
+    }
+  };
 
   const [invoices] = useState([
     { id: 12344, buyer: 'TechCorp Industries', amount: 25000, dueDate: '2025-07-15', status: 'Approved', description: 'Software Development Services Q2' },
@@ -85,7 +143,7 @@ const UnifiedSupplierDashboard = () => {
     const today = new Date();
     const diffTime = date - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
     if (diffDays === 0) return 'Due today';
     if (diffDays === 1) return 'Due tomorrow';
@@ -133,7 +191,7 @@ const UnifiedSupplierDashboard = () => {
           </div>
           <div className="flex items-center space-x-4">
             <div className="text-gray-400 text-sm">
-              <span className="text-gray-300 font-medium">0x742d35Cc...9A4C</span>
+              <span className="text-gray-300 font-medium">{account}</span>
             </div>
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
           </div>
@@ -232,14 +290,14 @@ const UnifiedSupplierDashboard = () => {
                   type="number"
                   placeholder="Invoice ID"
                   value={newInvoice.id}
-                  onChange={(e) => setNewInvoice({...newInvoice, id: e.target.value})}
+                  onChange={(e) => setNewInvoice({ ...newInvoice, id: e.target.value })}
                   className="bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition-all duration-300"
                 />
                 <input
                   type="number"
                   placeholder="Amount (USD)"
                   value={newInvoice.amount}
-                  onChange={(e) => setNewInvoice({...newInvoice, amount: e.target.value})}
+                  onChange={(e) => setNewInvoice({ ...newInvoice, amount: e.target.value })}
                   className="bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition-all duration-300"
                 />
               </div>
@@ -247,19 +305,19 @@ const UnifiedSupplierDashboard = () => {
                 type="text"
                 placeholder="Buyer Company"
                 value={newInvoice.buyer}
-                onChange={(e) => setNewInvoice({...newInvoice, buyer: e.target.value})}
+                onChange={(e) => setNewInvoice({ ...newInvoice, buyer: e.target.value })}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition-all duration-300"
               />
               <input
                 type="date"
                 value={newInvoice.dueDate}
-                onChange={(e) => setNewInvoice({...newInvoice, dueDate: e.target.value})}
+                onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all duration-300"
               />
               <textarea
                 placeholder="Invoice description"
                 value={newInvoice.description}
-                onChange={(e) => setNewInvoice({...newInvoice, description: e.target.value})}
+                onChange={(e) => setNewInvoice({ ...newInvoice, description: e.target.value })}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 h-20 resize-none transition-all duration-300"
               />
               <button
@@ -298,7 +356,7 @@ const UnifiedSupplierDashboard = () => {
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
               </button>
-              
+
               <div className="mt-6 space-y-3">
                 <h4 className="text-lg font-bold text-gray-300">Recent Verifications</h4>
                 <div className="space-y-2">
@@ -331,11 +389,10 @@ const UnifiedSupplierDashboard = () => {
             <button
               key={filter.key}
               onClick={() => setFilterStatus(filter.key)}
-              className={`px-8 py-3 rounded-xl font-bold transition-all duration-300 ${
-                filterStatus === filter.key
-                  ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
+              className={`px-8 py-3 rounded-xl font-bold transition-all duration-300 ${filterStatus === filter.key
+                ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
                 : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl cursor-pointer'
-              }`}
+                }`}
             >
               {filter.label} ({filter.count})
             </button>
@@ -389,7 +446,7 @@ const UnifiedSupplierDashboard = () => {
 
               {/* Actions */}
               <div className="flex space-x-2">
-                <button 
+                <button
                   onClick={() => setSelectedInvoice(invoice)}
                   className=
                   "w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
@@ -397,8 +454,8 @@ const UnifiedSupplierDashboard = () => {
                   <span className="relative z-10">View Details</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
                 </button>
-                
-                
+
+
               </div>
             </div>
           ))}
