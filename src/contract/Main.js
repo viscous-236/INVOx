@@ -1,6 +1,6 @@
 import {ethers} from 'ethers';
 
-const CONTRACT_ADDRESS = '';
+const CONTRACT_ADDRESS = '0x23fE2bd494d1eeF03584c324029C2724FBedD639';
 
 const CONTRACT_ABI = [
   "event ContractFunded(address indexed sender, uint256 amount)",
@@ -39,6 +39,8 @@ const CONTRACT_ABI = [
   "function getInvoiceTokenAddress(uint256 _invoiceId) external view returns (address)",
   "function getInvoiceDetails(uint256 _invoiceId) external view returns (uint256 id, address supplier, address buyer, uint256 amount, address[] memory investors, uint8 status, uint256 dueDate, uint256 totalInvestment, bool isPaid)",
 
+  // State Variables
+  "function hasChosenRole(address _user) external view returns (bool)",
 ];
 
 

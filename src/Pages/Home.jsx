@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { getContract } from '../contract/Main';
+import { useWallet } from '../WalletContext';
 import { getReadOnlyContract } from '../contract/Main';
 
 const Home = () => {
@@ -9,8 +10,9 @@ const Home = () => {
   const [scrollY, setScrollY] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const navigate = useNavigate();
-  const [contract, setContract] = useState(null);
-  const [address, setAddress] = useState(null);
+
+  const { address, contract, isConnected, isConnecting, connectWallet } = useWallet();
+
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -27,39 +29,54 @@ const Home = () => {
     };
   }, []);
 
-
-  const connectWallet = async () => {
-    if (window.ethereum) {
-      try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const signer = await provider.getSigner();
-        const address = await signer.getAddress();
-        setAddress(address);
-        console.log("Connected address:", address);
-        const contractInstance = await getContract();
-        setContract(contractInstance);
-
-        const role = await contractInstance.getUserRole(address);
-        if (role !== 0) {
-          setActiveRole(role === 1 ? 'supplier' : role === 2 ? 'buyer' : 'investor');
-          navigate(`/${role === 1 ? 'supplier' : role === 2 ? 'buyer' : 'investor'}`);
-        } else {
-          navigate('/select-role');
-        }
-      } catch (error) {
-        console.error("Error connecting wallet:", error);
-        alert("Failed to connect wallet. Please try again.");
-      }
-    } else {
-      alert("Please install MetaMask to connect your wallet.");
-    }
-  }
-
   const handleRoleSelection = async (role) => {
-    setActiveRole(role);
-    // contract.chooseRole(role === 'supplier' ? 1 : role === 'buyer' ? 2 : 3);
-    navigate(`/${role}`);
+    if (!isConnected) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      const hasChosenRole = await contract.hasChosenRole(address);
+      console.log("Has chosen role:", hasChosenRole);
+
+      if (!hasChosenRole) {
+        const roleMapping = {
+          'supplier': 0,
+          'buyer': 1,
+          'investor': 2
+        };
+
+        await contract.chooseRole(roleMapping[role]);
+        console.log(`Role chosen: ${role}`);
+        setActiveRole(role);
+        alert(`You have chosen the role: ${role.charAt(0).toUpperCase() + role.slice(1)}`);
+        navigate(`/${role}`);
+      } else {
+        const userRoleIndex = await contract.getUserRole(address);
+        console.log("User role index from contract:", userRoleIndex);
+
+        const roleIndexMapping = {
+          0: 'supplier',
+          1: 'buyer',
+          2: 'investor'
+        };
+
+        const existingRole = roleIndexMapping[parseInt(userRoleIndex)];
+        console.log("Existing role:", existingRole);
+
+        if (existingRole === role) {
+          setActiveRole(role);
+          navigate(`/${role}`);
+        } else {
+          alert(`You have already chosen the role: ${existingRole.charAt(0).toUpperCase() + existingRole.slice(1)}. You cannot change your role.`);
+          setActiveRole(existingRole);
+          navigate(`/${existingRole}`);
+        }
+      }
+    } catch (error) {
+      console.error("Error in role selection:", error);
+      alert("Failed to process role selection. Please try again.");
+    }
   };
 
   return (
@@ -128,7 +145,7 @@ const Home = () => {
               className="relative bg-gradient-to-r from-black via-purple-900/45 to-cyan-600/30 text-white px-8 py-3 rounded-xl hover:from-purple-900/45 hover:via-black hover:to-cyan-600/30 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/40 hover:shadow-xl hover:shadow-purple-500/60 font-bold group overflow-hidden cursor-pointer border border-purple-500/30 hover:border-purple-400/50">
 
               <span className="relative z-10 flex items-center space-x-2">
-                <span>Connect Wallet</span>
+                <span className="text-sm">🔗 {isConnected ? address.slice(0, 6) + '...' + address.slice(-4) : 'Connect Wallet'}</span>
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
               </span>
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
@@ -232,7 +249,7 @@ const Home = () => {
                   <span className="text-emerald-400 font-bold text-lg">🔗 Connected to InvoiceFinance</span>
                 </div>
                 <div className="bg-gray-800/60 px-4 py-2 rounded-lg border border-gray-600/50">
-                  <span className="text-gray-300 font-mono text-sm">0x742d35Cc...9A4C</span>
+                  <span className="text-gray-300 font-mono text-sm">{isConnected ? address.slice(0, 6) + '...' + address.slice(-4) : 'Connect Wallet'}</span>
                 </div>
               </div>
 
