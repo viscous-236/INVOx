@@ -1,6 +1,6 @@
 import {ethers} from 'ethers';
 
-const CONTRACT_ADDRESS = '0xe2BBD3df5B395E6E0248a975099632dA215498e0';
+const CONTRACT_ADDRESS = '0xFF8657E8A1562cE1E51839E92201eF02689DA20b';
 
 const CONTRACT_ABI = [
   "event ContractFunded(address indexed sender, uint256 amount)",
@@ -22,7 +22,7 @@ const CONTRACT_ABI = [
   "function revokeUpkeeper(address _upkeeper) external",
   "function chooseRole(uint8 _role) external",
   "function createInvoice(uint256 _id, address _buyer, uint256 _amount, uint256 _dueDate) external",
-  "function verifyInvoice(uint256 invoiceId, uint256 amount) external",
+  "function verifyInvoice(uint256 invoiceId) external",
   "function buyTokens(uint256 _id, uint256 _amount) external payable",
   "function buyerPayment(uint256 _id) external payable",
   "function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData)",
