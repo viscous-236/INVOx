@@ -60,7 +60,7 @@ const UnifiedSupplierDashboard = () => {
       // Get supplier's invoice IDs
       const supplierInvoiceIds = await contract.getSupplierInvoices(address);
       console.log('Supplier Invoice IDs:', supplierInvoiceIds);
-      
+
       // Fetch details for each invoice
       const invoicePromises = supplierInvoiceIds.map(async (invoiceId) => {
         try {
@@ -178,7 +178,7 @@ const UnifiedSupplierDashboard = () => {
 
     } catch (err) {
       console.error('Error creating invoice:', err);
-      
+
       // Provide specific error messages based on contract errors
       if (err.message.includes('Main__MustBeUnique')) {
         alert('Invoice ID already exists. Please use a different ID.');
@@ -198,146 +198,146 @@ const UnifiedSupplierDashboard = () => {
     }
   };
 
-const handleVerify = async () => {
-  if (!contract || !isConnected) {
-    alert('Please connect your wallet first');
-    return;
-  }
-
-  if (!verifyId) {
-    alert('Please enter an invoice ID to verify');
-    return;
-  }
-
-  const invoiceId = parseInt(verifyId);
-  console.log('=== VERIFICATION DEBUG START ===');
-  console.log('Invoice ID to verify:', invoiceId);
-  console.log('Connected address:', address);
-  console.log('Contract address:', contract?.target || contract?.address);
-
-  setLoading(true);
-  try {
-    // Step 1: Check if invoice exists using IdExists
-    console.log('Step 1: Checking if invoice exists...');
-    const exists = await contract.IdExists(invoiceId);
-    console.log('Invoice exists:', exists);
-    
-    if (!exists) {
-      alert('Invoice does not exist');
+  const handleVerify = async () => {
+    if (!contract || !isConnected) {
+      alert('Please connect your wallet first');
       return;
     }
 
-    // Step 2: Get invoice details using getInvoice (not getInvoiceDetails)
-    console.log('Step 2: Getting invoice details...');
-    const invoice = await contract.getInvoice(invoiceId);
-    console.log('Raw invoice data:', invoice);
-    
-    // Parse the invoice data based on your contract structure
-    const invoiceData = {
-      id: Number(invoice.id || invoice[0]),
-      supplier: invoice.supplier || invoice[1],
-      buyer: invoice.buyer || invoice[2],
-      amount: invoice.amount || invoice[3],
-      dueDate: Number(invoice.dueDate || invoice[4]),
-      status: Number(invoice.status || invoice[5]),
-      totalInvestment: invoice.totalInvestment || invoice[6],
-      isPaid: invoice.isPaid || invoice[7]
-    };
-    
-    console.log('Parsed invoice data:', invoiceData);
-    console.log('Invoice supplier:', invoiceData.supplier);
-    console.log('Current user address:', address);
-    console.log('Addresses match:', invoiceData.supplier.toLowerCase() === address.toLowerCase());
-    console.log('Invoice status:', invoiceData.status);
-
-    // Step 3: Verify ownership
-    if (invoiceData.supplier.toLowerCase() !== address.toLowerCase()) {
-      alert('You can only verify your own invoices');
-      console.log('ERROR: User is not the supplier of this invoice');
+    if (!verifyId) {
+      alert('Please enter an invoice ID to verify');
       return;
     }
 
-    // Step 4: Check status - must be Pending (0)
-    if (invoiceData.status !== 0) {
-      alert(`Invoice must be in Pending status to verify. Current status: ${statusMap[invoiceData.status] || invoiceData.status}`);
-      console.log('ERROR: Invoice status is not Pending. Current status:', invoiceData.status);
-      return;
-    }
+    const invoiceId = parseInt(verifyId);
+    console.log('=== VERIFICATION DEBUG START ===');
+    console.log('Invoice ID to verify:', invoiceId);
+    console.log('Connected address:', address);
+    console.log('Contract address:', contract?.target || contract?.address);
 
-    // Step 5: Check user role
-    console.log('Step 5: Checking user role...');
-    const userRole = await contract.getUserRole(address);
-    console.log('User role:', Number(userRole));
-    
-    if (Number(userRole) !== 0) { // 0 = Supplier
-      alert('Only suppliers can verify invoices');
-      console.log('ERROR: User is not a supplier. Role:', Number(userRole));
-      return;
-    }
-
-    // Step 6: Estimate gas before transaction
-    console.log('Step 6: Estimating gas for verification...');
+    setLoading(true);
     try {
-      const gasEstimate = await contract.verifyInvoice.estimateGas(invoiceId);
-      console.log('Gas estimate:', gasEstimate.toString());
-    } catch (gasError) {
-      console.error('Gas estimation failed:', gasError);
-      alert('Transaction will likely fail. Check console for details.');
-      return;
-    }
+      // Step 1: Check if invoice exists using IdExists
+      console.log('Step 1: Checking if invoice exists...');
+      const exists = await contract.IdExists(invoiceId);
+      console.log('Invoice exists:', exists);
 
-    // Step 7: Execute verification with explicit gas settings
-    console.log('Step 7: Executing verification transaction...');
-    const tx = await contract.verifyInvoice(invoiceId, {
-      gasLimit: 500000, // Set explicit gas limit
-      // You might also want to set gasPrice if needed
-    });
+      if (!exists) {
+        alert('Invoice does not exist');
+        return;
+      }
 
-    console.log('Transaction sent:', tx.hash);
-    console.log('Waiting for confirmation...');
-    
-    const receipt = await tx.wait();
-    console.log('Transaction confirmed:', receipt);
-    console.log('Transaction status:', receipt.status);
-    
-    if (receipt.status === 1) {
-      alert(`Invoice #${verifyId} verification requested successfully!`);
-      setVerifyId('');
-      await loadSupplierInvoices();
-    } else {
-      alert('Transaction failed. Check console for details.');
-    }
+      // Step 2: Get invoice details using getInvoice (not getInvoiceDetails)
+      console.log('Step 2: Getting invoice details...');
+      const invoice = await contract.getInvoice(invoiceId);
+      console.log('Raw invoice data:', invoice);
 
-  } catch (err) {
-    console.error('=== VERIFICATION ERROR ===');
-    console.error('Error object:', err);
-    console.error('Error message:', err.message);
-    console.error('Error code:', err.code);
-    console.error('Error data:', err.data);
-    
-    // More specific error handling
-    if (err.message.includes('Main__InvoiceStatusMustBePending')) {
-      alert('Invoice must be in Pending status to verify');
-    } else if (err.message.includes('Main__CallerMustBeSupplier')) {
-      alert('Only suppliers can verify invoices');
-    } else if (err.message.includes('Main__InvoiceNotExist')) {
-      alert('Invoice does not exist');
-    } else if (err.message.includes('user rejected')) {
-      alert('Transaction was rejected by user');
-    } else if (err.message.includes('insufficient funds')) {
-      alert('Insufficient funds for gas fees');
-    } else if (err.message.includes('gas')) {
-      alert('Gas estimation failed or insufficient gas limit');
-    } else if (err.reason) {
-      alert(`Contract error: ${err.reason}`);
-    } else {
-      alert(`Verification failed: ${err.message || 'Unknown error'}`);
+      // Parse the invoice data based on your contract structure
+      const invoiceData = {
+        id: Number(invoice.id || invoice[0]),
+        supplier: invoice.supplier || invoice[1],
+        buyer: invoice.buyer || invoice[2],
+        amount: invoice.amount || invoice[3],
+        dueDate: Number(invoice.dueDate || invoice[4]),
+        status: Number(invoice.status || invoice[5]),
+        totalInvestment: invoice.totalInvestment || invoice[6],
+        isPaid: invoice.isPaid || invoice[7]
+      };
+
+      console.log('Parsed invoice data:', invoiceData);
+      console.log('Invoice supplier:', invoiceData.supplier);
+      console.log('Current user address:', address);
+      console.log('Addresses match:', invoiceData.supplier.toLowerCase() === address.toLowerCase());
+      console.log('Invoice status:', invoiceData.status);
+
+      // Step 3: Verify ownership
+      if (invoiceData.supplier.toLowerCase() !== address.toLowerCase()) {
+        alert('You can only verify your own invoices');
+        console.log('ERROR: User is not the supplier of this invoice');
+        return;
+      }
+
+      // Step 4: Check status - must be Pending (0)
+      if (invoiceData.status !== 0) {
+        alert(`Invoice must be in Pending status to verify. Current status: ${statusMap[invoiceData.status] || invoiceData.status}`);
+        console.log('ERROR: Invoice status is not Pending. Current status:', invoiceData.status);
+        return;
+      }
+
+      // Step 5: Check user role
+      console.log('Step 5: Checking user role...');
+      const userRole = await contract.getUserRole(address);
+      console.log('User role:', Number(userRole));
+
+      if (Number(userRole) !== 0) { // 0 = Supplier
+        alert('Only suppliers can verify invoices');
+        console.log('ERROR: User is not a supplier. Role:', Number(userRole));
+        return;
+      }
+
+      // Step 6: Estimate gas before transaction
+      console.log('Step 6: Estimating gas for verification...');
+      try {
+        const gasEstimate = await contract.verifyInvoice.estimateGas(invoiceId);
+        console.log('Gas estimate:', gasEstimate.toString());
+      } catch (gasError) {
+        console.error('Gas estimation failed:', gasError);
+        alert('Transaction will likely fail. Check console for details.');
+        return;
+      }
+
+      // Step 7: Execute verification with explicit gas settings
+      console.log('Step 7: Executing verification transaction...');
+      const tx = await contract.verifyInvoice(invoiceId, {
+        gasLimit: 500000, // Set explicit gas limit
+        // You might also want to set gasPrice if needed
+      });
+
+      console.log('Transaction sent:', tx.hash);
+      console.log('Waiting for confirmation...');
+
+      const receipt = await tx.wait();
+      console.log('Transaction confirmed:', receipt);
+      console.log('Transaction status:', receipt.status);
+
+      if (receipt.status === 1) {
+        alert(`Invoice #${verifyId} verification requested successfully!`);
+        setVerifyId('');
+        await loadSupplierInvoices();
+      } else {
+        alert('Transaction failed. Check console for details.');
+      }
+
+    } catch (err) {
+      console.error('=== VERIFICATION ERROR ===');
+      console.error('Error object:', err);
+      console.error('Error message:', err.message);
+      console.error('Error code:', err.code);
+      console.error('Error data:', err.data);
+
+      // More specific error handling
+      if (err.message.includes('Main__InvoiceStatusMustBePending')) {
+        alert('Invoice must be in Pending status to verify');
+      } else if (err.message.includes('Main__CallerMustBeSupplier')) {
+        alert('Only suppliers can verify invoices');
+      } else if (err.message.includes('Main__InvoiceNotExist')) {
+        alert('Invoice does not exist');
+      } else if (err.message.includes('user rejected')) {
+        alert('Transaction was rejected by user');
+      } else if (err.message.includes('insufficient funds')) {
+        alert('Insufficient funds for gas fees');
+      } else if (err.message.includes('gas')) {
+        alert('Gas estimation failed or insufficient gas limit');
+      } else if (err.reason) {
+        alert(`Contract error: ${err.reason}`);
+      } else {
+        alert(`Verification failed: ${err.message || 'Unknown error'}`);
+      }
+    } finally {
+      setLoading(false);
+      console.log('=== VERIFICATION DEBUG END ===');
     }
-  } finally {
-    setLoading(false);
-    console.log('=== VERIFICATION DEBUG END ===');
-  }
-};
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -397,14 +397,13 @@ const handleVerify = async () => {
         try {
           const role = await contract.getUserRole(address);
           const roleInNum = Number(role);
-          
-          // UserRole.Supplier = 0 in your contract
+
           if (roleInNum !== 0) {
             alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
             navigate('/');
             return;
           }
-          
+
           await loadSupplierInvoices();
         } catch (err) {
           console.error('Error checking user role:', err);
@@ -416,7 +415,7 @@ const handleVerify = async () => {
         navigate('/');
       }
     };
-    
+
     if (isConnected) {
       checkUserRole();
     }
@@ -611,7 +610,7 @@ const handleVerify = async () => {
                 onChange={(e) => setVerifyId(e.target.value)}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-300"
               />
-          
+
               <button
                 onClick={handleVerify}
                 className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"

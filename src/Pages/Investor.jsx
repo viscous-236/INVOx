@@ -30,7 +30,7 @@ const Investor = () => {
   // Convert contract status to display status
   const getDisplayStatus = (contractStatus) => {
     switch (contractStatus) {
-      case 0: return 'ReadyForFunding';
+      case 0: return 'VerificationPending';
       case 1: return 'VerificationInProgress';
       case 2: return 'ReadyForFunding';
       case 3: return 'Rejected';
@@ -204,13 +204,13 @@ const Investor = () => {
 
   const isInvestable = (invoice) => {
     const status = invoice.status;
-    return true;
+    return status === 'ReadyForFunding';
   };
 
   const getButtonConfig = (invoice) => {
     const status = invoice.status;
 
-    switch ('ReadyForFunding') {
+    switch (status) {
       case 'ReadyForFunding':
         return {
           text: '💎 Invest Now',
