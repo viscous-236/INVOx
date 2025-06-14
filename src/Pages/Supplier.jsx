@@ -1,20 +1,33 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { ethers } from 'ethers';
-import { getContract, getReadOnlyContract } from '../contract/Main';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useWallet } from '../WalletContext';
+import { ethers } from 'ethers';
 
 const UnifiedSupplierDashboard = () => {
   const [scrollY, setScrollY] = useState(0);
   const [filterStatus, setFilterStatus] = useState('all');
   const [newInvoice, setNewInvoice] = useState({
-    id: '', buyer: '', amount: '', dueDate: '', description: ''
+    id: '', buyer: '', amount: '', dueDate: ''
   });
   const [verifyId, setVerifyId] = useState('');
+  const [verifyAmount, setVerifyAmount] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [account, setAccount] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const { address, contract, isConnected } = useWallet();
+
+  // Status mapping from contract to UI
+  const statusMap = {
+    0: 'Pending',    // PENDING
+    1: 'Verified',   // VERIFIED 
+    2: 'Approved',   // APPROVED
+    3: 'Rejected',       // PAID
+    4: 'Paid'    // REJECTED
+  };
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -31,94 +44,208 @@ const UnifiedSupplierDashboard = () => {
     };
   }, []);
 
+  // Load supplier's invoices when contract is available
   useEffect(() => {
-    getConnectedAccount();
-  }, []);
-
-  useEffect(() => {
-    const handleAccountsChanged = (accounts) => {
-      if (accounts.length === 0) {
-        console.log("Account: Disconnected");
-        setAccount(null);
-        navigate("/");
-      } else {
-        const newAccount = accounts[0];
-        if (newAccount !== account) {
-          console.log("Account changed:", newAccount);
-          setAccount(newAccount);
-          navigate("/");
-        }
-      }
-    };
-
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
+    if (contract && address && isConnected) {
+      loadSupplierInvoices();
     }
+  }, [contract, address, isConnected]);
 
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      }
-    };
-  }, [account, navigate]);
+  const loadSupplierInvoices = async () => {
+    if (!contract || !address) return;
 
-  const getConnectedAccount = async () => {
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          console.log("Retrieved connected account:", accounts[0]);
-        } else {
-          console.log("No connected accounts found");
-          navigate("/");
+    setLoading(true);
+    setError('');
+
+    try {
+      // Get supplier's invoice IDs
+      const supplierInvoiceIds = await contract.getSupplierInvoices(address);
+      console.log('Supplier Invoice IDs:', supplierInvoiceIds);
+      // Fetch details for each invoice
+      const invoicePromises = supplierInvoiceIds.map(async (invoiceId) => {
+        try {
+          const invoiceDetails = await contract.getInvoiceDetails(invoiceId);
+          console.log(`Invoice ${invoiceId} details:`, invoiceDetails);
+          // const tokenDetails = await contract.getTokenDetails(invoiceId);
+          // console.log(`Token details for invoice ${invoiceId}:`, tokenDetails);
+
+
+          return {
+            id: Number(invoiceDetails.id),
+            buyer: invoiceDetails.buyer,
+            amount: Number(ethers.formatEther(invoiceDetails.amount)),
+            dueDate: new Date(Number(invoiceDetails.dueDate) * 1000).toISOString().split('T')[0],
+            status: statusMap[invoiceDetails.status] || 'Unknown',
+            totalInvestment: Number(ethers.formatEther(invoiceDetails.totalInvestment)),
+            isPaid: invoiceDetails.isPaid
+          };
+        } catch (err) {
+          console.error(`Error loading invoice ${invoiceId}:`, err);
+          return null;
         }
-      } catch (error) {
-        console.error('Error getting connected account:', error);
-        navigate("/");
-      }
-    } else {
-      alert('Please install MetaMask to connect your wallet.');
-      navigate("/");
+      });
+
+      const loadedInvoices = (await Promise.all(invoicePromises)).filter(Boolean);
+      setInvoices(loadedInvoices);
+    } catch (err) {
+      console.error('Error loading supplier invoices:', err);
+      setError('Failed to load invoices');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const [invoices] = useState([
-    { id: 12344, buyer: 'TechCorp Industries', amount: 25000, dueDate: '2025-07-15', status: 'Approved', description: 'Software Development Services Q2' },
-    { id: 12343, buyer: 'Global Manufacturing Ltd', amount: 40000, dueDate: '2025-08-20', status: 'Pending', description: 'Industrial Equipment Supply' },
-    { id: 12342, buyer: 'Digital Solutions Inc', amount: 15000, dueDate: '2025-06-01', status: 'Paid', description: 'Cloud Infrastructure Setup' },
-    { id: 12341, buyer: 'Logistics Pro Services', amount: 32000, dueDate: '2025-07-30', status: 'Paid', description: 'Transportation & Delivery Services' },
-    { id: 12340, buyer: 'Creative Design Studio', amount: 18500, dueDate: '2025-06-28', status: 'Paid', description: 'Brand Identity & Marketing Campaign' },
-    { id: 12339, buyer: 'Healthcare Solutions', amount: 28000, dueDate: '2025-07-12', status: 'Rejected', description: 'Medical Equipment Maintenance' }
-  ]);
-
   const filteredInvoices = useMemo(() => {
-    return filterStatus === 'all' ? invoices : invoices.filter(inv => inv.status.toLowerCase() === filterStatus);
+    return filterStatus === 'all'
+      ? invoices
+      : invoices.filter(inv => inv.status.toLowerCase() === filterStatus);
   }, [invoices, filterStatus]);
 
   const stats = useMemo(() => {
     const pending = invoices.filter(inv => inv.status === 'Pending').length;
+    const verified = invoices.filter(inv => inv.status === 'Verified').length;
     const approved = invoices.filter(inv => inv.status === 'Approved').length;
     const paid = invoices.filter(inv => inv.status === 'Paid').length;
     const totalValue = invoices.reduce((sum, inv) => sum + inv.amount, 0);
-    return { totalInvoices: invoices.length, pending, approved, paid, totalValue };
+
+    return {
+      totalInvoices: invoices.length,
+      pending,
+      verified,
+      approved,
+      paid,
+      totalValue
+    };
   }, [invoices]);
 
-  const handleCreateInvoice = () => {
-    alert('Invoice created successfully!');
-    setNewInvoice({ id: '', buyer: '', amount: '', dueDate: '', description: '' });
+  const handleCreateInvoice = async () => {
+    if (!contract || !isConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+    console.log('contract', contract);
+    console.log('address', address);
+
+    const { id, buyer, amount, dueDate } = newInvoice;
+
+    // Validation
+    if (!id || !buyer || !amount || !dueDate) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    if (!ethers.isAddress(buyer)) {
+      alert('Please enter a valid buyer address');
+      return;
+    }
+
+    console.log('Creating invoice with data:', { id, buyer, amount, dueDate });
+
+    setLoading(true);
+    try {
+      // Check if invoice ID already exists
+      const exists = await contract.IdExists(id);
+      console.log('Invoice ID exists:', exists);
+      if (exists) {
+        alert('Invoice ID already exists. Please use a different ID.');
+        return;
+      }
+
+      // Convert amount to wei and dueDate to timestamp
+      const amountInWei = ethers.parseEther(amount.toString());
+      const dueDateTimestamp = Math.floor(new Date(dueDate).getTime() / 1000);
+      console.log('Amount in wei:', amountInWei.toString());
+      console.log('Due date timestamp:', dueDateTimestamp);
+
+      // Create invoice on blockchain
+      const tx = await contract.createInvoice(
+        parseInt(id),
+        buyer,
+        amountInWei,
+        dueDateTimestamp
+      );
+
+      await tx.wait();
+      console.log('Invoice created successfully:');
+
+      alert('Invoice created successfully!');
+      setNewInvoice({ id: '', buyer: '', amount: '', dueDate: '', });
+
+      // Reload invoices
+      await loadSupplierInvoices();
+
+    } catch (err) {
+      console.error('Error creating invoice:', err);
+      alert('Failed to create invoice. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVerify = () => {
-    alert(`Verifying invoice #${verifyId}...`);
-    setVerifyId('');
+  const handleVerify = async () => {
+    if (!contract || !isConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    if (!verifyId) {
+      alert('Please enter an invoice ID to verify');
+      return;
+    }
+
+    if (!verifyAmount) {
+      alert('Please enter the amount to verify');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const userRole = await contract.getUserRole(address);
+      console.log('User role:', userRole.toString());
+
+      // Get invoice details first
+      const invoice = await contract.getInvoice(parseInt(verifyId));
+      console.log('Invoice details:', {
+        supplier: invoice.supplier,
+        status: invoice.status.toString(),
+        amount: invoice.amount.toString()
+      });
+
+      if (invoice.supplier !== address) {
+        alert('You can only verify your own invoices');
+        return;
+      }
+
+      console.log('About to call verifyInvoice with:', {
+        id: Number(parseInt(verifyId)),
+        amount: Math.round(parseFloat(verifyAmount) * 100)
+      });
+
+      // Verify invoice
+      const tx = await contract.verifyInvoice(
+        Number(parseInt(verifyId)),
+        Math.round(parseFloat(verifyAmount) * 100),
+      );
+
+      await tx.wait();
+      alert(`Invoice #${verifyId} verification requested successfully!`);
+      setVerifyId('');
+      await loadSupplierInvoices();
+
+    } catch (err) {
+      console.error('Error verifying invoice:', err);
+      alert('Failed to verify invoice. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusColor = (status) => {
     const colors = {
       'Pending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+      'Verified': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
       'Approved': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
-      'Paid': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+      'Paid': 'bg-green-500/20 text-green-400 border-green-500/40',
       'Rejected': 'bg-red-500/20 text-red-400 border-red-500/40'
     };
     return colors[status] || 'bg-gray-500/20 text-gray-300 border-gray-500/30';
@@ -127,6 +254,7 @@ const UnifiedSupplierDashboard = () => {
   const getStatusIcon = (status) => {
     const icons = {
       'Pending': '⏳',
+      'Verified': '🔍',
       'Approved': '✅',
       'Paid': '🏦',
       'Rejected': '❌'
@@ -135,6 +263,10 @@ const UnifiedSupplierDashboard = () => {
   };
 
   const getBuyerInitials = (buyer) => {
+    // For address, show first 2 characters after 0x
+    if (buyer.startsWith('0x')) {
+      return buyer.slice(2, 4).toUpperCase();
+    }
     return buyer.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
 
@@ -149,6 +281,35 @@ const UnifiedSupplierDashboard = () => {
     if (diffDays === 1) return 'Due tomorrow';
     return `Due in ${diffDays} days`;
   };
+
+  const formatAddress = (address) => {
+    if (!address) return '';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const handleInvoiceClick = (invoice) => {
+    setSelectedInvoice(invoice);
+  };
+
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (contract && address) {
+        const role = await contract.getUserRole(address);
+        const roleInNum = Number(role);
+        if (roleInNum !== 0) {
+          alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
+          navigate('/');
+        } else {
+          await loadSupplierInvoices();
+        }
+      } else {
+        alert('Please connect your wallet to access the Supplier dashboard.');
+        navigate('/');
+      }
+    }
+    checkUserRole();
+  }, [navigate, address]);
+
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
@@ -190,8 +351,8 @@ const UnifiedSupplierDashboard = () => {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <div className="text-gray-400 text-sm">
-              <span className="text-gray-300 font-medium">{account}</span>
+            <div className="text-gray-300 text-sm">
+              <span className="text-gray-300 font-medium">{address}</span>
             </div>
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
           </div>
@@ -233,7 +394,7 @@ const UnifiedSupplierDashboard = () => {
               accent: "emerald"
             },
             {
-              value: `$${(stats.totalValue / 1000).toFixed(0)}K`,
+              value: `$${stats.totalValue}`,
               label: "Total Value",
               change: "All invoices",
               icon: "💰",
@@ -314,12 +475,6 @@ const UnifiedSupplierDashboard = () => {
                 onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all duration-300"
               />
-              <textarea
-                placeholder="Invoice description"
-                value={newInvoice.description}
-                onChange={(e) => setNewInvoice({ ...newInvoice, description: e.target.value })}
-                className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 h-20 resize-none transition-all duration-300"
-              />
               <button
                 onClick={handleCreateInvoice}
                 className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
@@ -344,6 +499,13 @@ const UnifiedSupplierDashboard = () => {
                 placeholder="Invoice ID to verify"
                 value={verifyId}
                 onChange={(e) => setVerifyId(e.target.value)}
+                className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-300"
+              />
+              <input
+                type="amount"
+                placeholder="Amount to verify (USD)"
+                value={verifyAmount}
+                onChange={(e) => setVerifyAmount(e.target.value)}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-300"
               />
               <button
@@ -434,13 +596,10 @@ const UnifiedSupplierDashboard = () => {
                 </div>
               </div>
 
-              {/* Buyer & Description */}
+              {/* Buyer */}
               <div className="mb-4">
                 <div className="font-bold text-white text-lg mb-1">
-                  {invoice.buyer}
-                </div>
-                <div className="text-sm text-gray-400 line-clamp-2">
-                  {invoice.description}
+                  {formatAddress(invoice.buyer)}
                 </div>
               </div>
 
@@ -474,7 +633,7 @@ const UnifiedSupplierDashboard = () => {
         {/* Invoice Details Modal */}
         {selectedInvoice && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-xl border border-gray-700/50 rounded-3xl p-6 max-w-md w-full shadow-2xl shadow-purple-500/20">
+            <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-xl border border-gray-700/50 rounded-3xl p-6 max-w-lg w-full shadow-2xl shadow-purple-500/20">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-black text-white">Invoice Details</h3>
                 <button
@@ -510,12 +669,6 @@ const UnifiedSupplierDashboard = () => {
                 </div>
               </div>
 
-              <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-cyan-400 text-sm font-bold">Description</span>
-                </div>
-                <div className="text-white text-sm mt-1">{selectedInvoice.description}</div>
-              </div>
 
               <button
                 onClick={() => setSelectedInvoice(null)}
