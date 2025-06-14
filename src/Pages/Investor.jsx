@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useWallet } from '../WalletContext';
+import { ethers } from 'ethers';
 
 const Investor = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -8,8 +10,35 @@ const Investor = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [scrollY, setScrollY] = useState(0);
   const [showPayments, setShowPayments] = useState(false);
-  const [account, setAccount] = useState(null);
+  const [availableInvoices, setAvailableInvoices] = useState([]);
+  const [priceOfOneTokenInEth, setPriceOfOneTokenInEth] = useState(0);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  const { address, contract, isConnected, provider } = useWallet();
+
+  // Status mapping from contract uint8 to readable status
+  const STATUS_MAPPING = {
+    0: 'Pending',
+    1: 'VerificationInProgress',
+    2: 'Approved',
+    3: 'Rejected',
+    4: 'Paid'
+  };
+
+  // Convert contract status to display status
+  const getDisplayStatus = (contractStatus) => {
+    switch (contractStatus) {
+      case 0: return 'ReadyForFunding';
+      case 1: return 'VerificationInProgress';
+      case 2: return 'ReadyForFunding';
+      case 3: return 'Rejected';
+      case 4: return 'Paid';
+      default: return 'Unknown';
+    }
+  };
+
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -27,254 +56,297 @@ const Investor = () => {
     };
   }, []);
 
-  useEffect(() => {
-    getConnectedAccount();
-  }, []);
 
-  useEffect(() => {
-    const handleAccountsChanged = (accounts) => {
-      if (accounts.length === 0) {
-        console.log("Account: Disconnected");
-        setAccount(null);
-        navigate("/");
-      } else {
-        const newAccount = accounts[0];
-        if (newAccount !== account) {
-          console.log("Account changed:", newAccount);
-          setAccount(newAccount);
-          navigate("/");
+  const fetchInvoices = async () => {
+    try {
+      setLoading(true);
+
+
+      const getAllInvoiceIds = await contract.getAllInvoiceIds();
+
+
+      const invoicePromises = getAllInvoiceIds.map(async (id) => {
+        try {
+          const invoiceData = await contract.getInvoiceDetails(id);
+
+          return {
+            id: Number(invoiceData.id),
+            supplier: formatAddress(invoiceData.supplier),
+            buyer: formatAddress(invoiceData.buyer),
+            amount: parseFloat(ethers.formatEther(invoiceData.amount)),
+            dueDate: new Date(Number(invoiceData.dueDate) * 1000).toISOString().split('T')[0],
+            status: getDisplayStatus(Number(invoiceData.status)),
+            fundedAmount: parseFloat(ethers.formatEther(invoiceData.totalInvestment)),
+            daysToPayment: Math.ceil((Number(invoiceData.dueDate) * 1000 - Date.now()) / (1000 * 60 * 60 * 24)),
+            description: `Invoice #${invoiceData.id} for $${parseFloat(ethers.formatEther(invoiceData.amount)).toFixed(2)} from ${formatAddress(invoiceData.supplier)} to ${formatAddress(invoiceData.buyer)}`,
+            tokenAddress: await contract.getInvoiceTokenAddress(id),
+            isPaid: invoiceData.isPaid
+          }
+        } catch (error) {
+          console.error(`Error fetching invoice at id ${id}:`, error);
+          return null; // Return null for this invoice if there's an error
         }
-      }
-    };
+      });
 
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
-    }
+      const invoices = (await Promise.all(invoicePromises)).filter(Boolean);
 
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      }
-    };
-  }, [account, navigate]);
-
-  const getConnectedAccount = async () => {
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          console.log("Retrieved connected account:", accounts[0]);
-        } else {
-          console.log("No connected accounts found");
-          navigate("/");
-        }
-      } catch (error) {
-        console.error('Error getting connected account:', error);
-        navigate("/");
-      }
-    } else {
-      alert('Please install MetaMask to connect your wallet.');
-      navigate("/");
+      setAvailableInvoices(invoices);
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Mock payment history data
-  const [paymentHistory] = useState([
-    {
-      id: 1,
-      invoice: '#16304',
-      amount: 1598,
-      timestamp: '11:37:09 PM',
-      date: '2025-06-09',
-      source: 'Chainlink Automation',
-      status: 'Completed'
-    },
-    {
-      id: 2,
-      invoice: '#11549',
-      amount: 1178,
-      timestamp: '11:36:57 PM',
-      date: '2025-06-09',
-      source: 'Chainlink Automation',
-      status: 'Completed'
-    },
-    {
-      id: 3,
-      invoice: '#14782',
-      amount: 1550,
-      timestamp: '11:36:45 PM',
-      date: '2025-06-09',
-      source: 'Chainlink Automation',
-      status: 'Completed'
-    },
-    {
-      id: 4,
-      invoice: '#10561',
-      amount: 2821,
-      timestamp: '11:36:33 PM',
-      date: '2025-06-09',
-      source: 'Chainlink Automation',
-      status: 'Completed'
-    },
-    {
-      id: 5,
-      invoice: '#12847',
-      amount: 950,
-      timestamp: '10:22:15 PM',
-      date: '2025-06-08',
-      source: 'Chainlink Automation',
-      status: 'Completed'
+  useEffect(() => {
+    if (isConnected && contract && address) {
+      fetchInvoices();
+      setupEventListeners();
     }
-  ]);
+  }, [isConnected, contract, address]);
 
-  // Available invoices for investment
-  const [availableInvoices] = useState([
-    {
-      id: 12344,
-      supplier: 'TechCorp Ltd',
-      buyer: 'Global Industries',
-      amount: 25000,
-      dueDate: '2025-07-15',
-      status: 'Open',
-      fundedAmount: 0,
-      daysToPayment: 35,
-      description: 'Software Development Services'
-    },
-    {
-      id: 12345,
-      supplier: 'Manufacturing Inc',
-      buyer: 'AutoTech Corp',
-      amount: 35000,
-      dueDate: '2025-06-20',
-      status: 'Funding',
-      fundedAmount: 18500,
-      daysToPayment: 10,
-      description: 'Industrial Equipment Supply'
-    },
-    {
-      id: 12346,
-      supplier: 'Global Logistics',
-      buyer: 'Retail Chain Ltd',
-      amount: 18000,
-      dueDate: '2025-07-01',
-      status: 'Funded',
-      fundedAmount: 18000,
-      daysToPayment: 21,
-      description: 'Shipping & Transportation'
-    },
-    {
-      id: 12347,
-      supplier: 'Design Studio Pro',
-      buyer: 'Fashion Brands Co',
-      amount: 12500,
-      dueDate: '2025-06-25',
-      status: 'Open',
-      fundedAmount: 0,
-      daysToPayment: 15,
-      description: 'Brand Identity & Marketing'
-    },
-    {
-      id: 12348,
-      supplier: 'Cloud Services Co',
-      buyer: 'StartupHub Inc',
-      amount: 8500,
-      dueDate: '2025-07-10',
-      status: 'Funding',
-      fundedAmount: 3200,
-      daysToPayment: 30,
-      description: 'Infrastructure Services'
-    },
-    {
-      id: 12349,
-      supplier: 'Legal Associates',
-      buyer: 'Corporate Group',
-      amount: 15000,
-      dueDate: '2025-06-15',
-      status: 'Paid',
-      fundedAmount: 15000,
-      daysToPayment: 0,
-      description: 'Legal Services'
-    },
-    {
-      id: 12350,
-      supplier: 'Healthcare Solutions',
-      buyer: 'Medical Centers Inc',
-      amount: 42000,
-      dueDate: '2025-07-20',
-      status: 'Funded',
-      fundedAmount: 42000,
-      daysToPayment: 40,
-      description: 'Medical Equipment'
-    },
-    {
-      id: 12351,
-      supplier: 'Green Energy Co',
-      buyer: 'City Infrastructure',
-      amount: 67000,
-      dueDate: '2025-08-01',
-      status: 'Funding',
-      fundedAmount: 23500,
-      daysToPayment: 52,
-      description: 'Solar Panel Installation'
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (contract && address) {
+        const role = await contract.getUserRole(address);
+        const roleInNum = Number(role);
+        if (roleInNum !== 2) {
+          alert('You do not have permission to access this dashboard. Please switch to the Investor role.');
+          navigate('/');
+        } else {
+          await fetchInvoices();
+        }
+      } else {
+        alert('Please connect your wallet to access the Invoice dashboard.');
+        navigate('/');
+      }
     }
-  ]);
+    checkUserRole();
+  }, [navigate, address]);
+
+
+
+  const setupEventListeners = () => {
+    if (!contract) return;
+
+    // Listen for successful token purchases
+    contract.on('SuccessfulTokenPurchase', (invoiceId, buyer, amount, event) => {
+      if (buyer.toLowerCase() === address.toLowerCase()) {
+        const amountInEth = parseFloat(ethers.utils.formatEther(amount));
+        setPaymentHistory(prev => [{
+          id: Date.now(),
+          invoice: `#${invoiceId.toString()}`,
+          amount: amountInEth,
+          timestamp: new Date().toLocaleTimeString(),
+          date: new Date().toISOString().split('T')[0],
+          source: 'Token Purchase',
+          status: 'Completed'
+        }, ...prev]);
+
+        // Refresh invoices to update funding status
+        fetchInvoices();
+      }
+    });
+
+    // Listen for payment distributions
+    contract.on('PaymentDistributed', (invoiceId, receiver, amount, event) => {
+      if (receiver.toLowerCase() === address.toLowerCase()) {
+        const amountInEth = parseFloat(ethers.utils.formatEther(amount));
+        setPaymentHistory(prev => [{
+          id: Date.now(),
+          invoice: `#${invoiceId.toString()}`,
+          amount: amountInEth,
+          timestamp: new Date().toLocaleTimeString(),
+          date: new Date().toISOString().split('T')[0],
+          source: 'Chainlink Automation',
+          status: 'Completed'
+        }, ...prev]);
+      }
+    });
+
+    return () => {
+      contract.removeAllListeners();
+    };
+  };
 
   const filteredInvoices = useMemo(() => {
     if (filterStatus === 'all') return availableInvoices;
-    return availableInvoices.filter(invoice => invoice.status.toLowerCase() === filterStatus);
+    return availableInvoices.filter(invoice => {
+      const displayStatus = invoice.status;
+      return displayStatus.toLowerCase() === filterStatus.toLowerCase();
+    });
   }, [availableInvoices, filterStatus]);
 
   const stats = useMemo(() => {
     const totalValue = availableInvoices.reduce((sum, inv) => sum + inv.amount, 0);
-    const openInvoices = availableInvoices.filter(inv => inv.status === 'Open').length;
-    const fundingInvoices = availableInvoices.filter(inv => inv.status === 'Funding').length;
-    const activeInvoices = availableInvoices.filter(inv => inv.status === 'Funded').length;
+    const readyForFunding = availableInvoices.filter(inv =>
+      inv.status === 'ReadyForFunding'
+    ).length;
+    const verificationPending = availableInvoices.filter(inv =>
+      inv.status === 'VerificationPending'
+    ).length;
+    const verificationInProgress = availableInvoices.filter(inv =>
+      inv.status === 'VerificationInProgress'
+    ).length;
+    const paid = availableInvoices.filter(inv =>
+      inv.status === 'Paid'
+    ).length;
 
     return {
       totalInvoices: availableInvoices.length,
       totalValue,
-      openInvoices,
-      fundingInvoices,
-      activeInvoices
+      readyForFunding,
+      verificationPending,
+      verificationInProgress,
+      paid
     };
   }, [availableInvoices]);
 
+  const isInvestable = (invoice) => {
+    const status = invoice.status;
+    return true;
+  };
+
+  const getButtonConfig = (invoice) => {
+    const status = invoice.status;
+
+    switch ('ReadyForFunding') {
+      case 'ReadyForFunding':
+        return {
+          text: '💎 Invest Now',
+          className: "w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group",
+          disabled: false,
+          showShimmer: true
+        };
+      case 'VerificationPending':
+        return {
+          text: '⏳ Pending Verification',
+          className: 'w-full bg-yellow-600/20 text-yellow-400 border border-yellow-500/30 py-3 rounded-xl font-bold text-sm cursor-not-allowed opacity-70',
+          disabled: true,
+          showShimmer: false
+        };
+      case 'VerificationInProgress':
+        return {
+          text: '🔄 Under Verification',
+          className: 'w-full bg-blue-600/20 text-blue-400 border border-blue-500/30 py-3 rounded-xl font-bold text-sm cursor-not-allowed opacity-70',
+          disabled: true,
+          showShimmer: false
+        };
+      case 'Rejected':
+        return {
+          text: '❌ Rejected',
+          className: 'w-full bg-red-600/20 text-red-400 border border-red-500/30 py-3 rounded-xl font-bold text-sm cursor-not-allowed opacity-70',
+          disabled: true,
+          showShimmer: false
+        };
+      case 'Paid':
+        return {
+          text: '✨ Paid by Buyer',
+          className: 'w-full bg-purple-600/20 text-purple-400 border border-purple-500/30 py-3 rounded-xl font-bold text-sm cursor-not-allowed opacity-70',
+          disabled: true,
+          showShimmer: false
+        };
+      default:
+        return {
+          text: '❓ Unknown Status',
+          className: 'w-full bg-gray-600/20 text-gray-400 border border-gray-500/30 py-3 rounded-xl font-bold text-sm cursor-not-allowed opacity-70',
+          disabled: true,
+          showShimmer: false
+        };
+    }
+  };
+
   const handleInvest = (invoice) => {
-    if (invoice.status === 'Open' || invoice.status === 'Funding') {
+    if (true) {
       setSelectedInvoice(invoice);
-      setInvestmentAmount('1000');
+      setInvestmentAmount('1');
     }
   };
 
   const processInvestment = async () => {
-    if (!selectedInvoice || !investmentAmount) return;
+    if (!selectedInvoice || !investmentAmount || !contract) return;
 
-    console.log(`Processing investment of ${investmentAmount} for Invoice #${selectedInvoice.id}`);
-    alert(`Investment of ${parseFloat(investmentAmount).toLocaleString()} processed successfully!\n\nChainlink Automation will handle payment distribution when the invoice is paid.`);
-    setSelectedInvoice(null);
-    setInvestmentAmount('');
+    try {
+      setLoading(true);
+
+      // Convert investment amount to wei
+      // const amountInWei = ethers.utils.parseEther(investmentAmount);
+
+      const totalValue = priceOfOneTokenInEth * investmentAmount;
+      const amountInWei = ethers.parseEther(totalValue.toString());
+
+      // Call buyTokens function
+      const tx = await contract.buyTokens(selectedInvoice.id, investmentAmount, {
+        value: amountInWei
+      });
+
+      await tx.wait();
+
+      alert(`Investment of ${parseFloat(totalValue).toLocaleString()} ETH processed successfully!\n\nChainlink Automation will handle payment distribution when the invoice is paid.`);
+
+      setSelectedInvoice(null);
+      setInvestmentAmount('');
+
+      // Refresh invoices to show updated funding status
+      fetchInvoices();
+
+    } catch (error) {
+      console.error('Investment failed:', error);
+      alert('Investment failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPriceOfOneTokenInEth = async (invoiceId) => {
+    if (!contract || !invoiceId) return 0;
+
+    try {
+      console.log('Fetching token price for invoice ID:', invoiceId);
+      const priceInWei = await contract.getPriceOfTokenInEth(invoiceId);
+      setPriceOfOneTokenInEth(parseFloat(ethers.formatEther(priceInWei)).toFixed(4));
+      return parseFloat(ethers.formatEther(priceInWei)).toFixed(4);
+    } catch (error) {
+      console.error('Error fetching token price:', error);
+      return 0;
+    }
+  }
+
+  const getTokenAddress = async (invoiceId) => {
+    if (!contract || !invoiceId) return null;
+
+    try {
+      const tokenDetails = await contract.getTokenDetails(invoiceId);
+      return {
+        tokenAddress: tokenDetails.tokenAddress,
+      };
+    } catch (error) {
+      console.error('Error fetching token address:', error);
+      return null;
+    }
+  }
+
+  const formatAddress = (address) => {
+    if (!address) return '';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
   const getStatusBadge = (status) => {
     const statusStyles = {
-      'Open': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-      'Funding': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
-      'Funded': 'bg-green-500/20 text-green-400 border-green-500/40',
+      'VerificationPending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+      'VerificationInProgress': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+      'ReadyForFunding': 'bg-green-500/20 text-green-400 border-green-500/40',
+      'Rejected': 'bg-red-500/20 text-red-400 border-red-500/40',
       'Paid': 'bg-purple-500/20 text-purple-400 border-purple-500/40'
     };
 
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusStyles[status]}`}>
+      <span className={`px-2 py-1 rounded-full text-xs border font-medium ${statusStyles[status] || 'bg-gray-500/20 text-gray-400 border-gray-500/40'}`}>
         {status}
       </span>
     );
   };
 
-  const getFundingProgress = (funded, total) => {
-    const percentage = (funded / total) * 100;
-    return Math.min(percentage, 100);
-  };
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-black">
@@ -338,7 +410,7 @@ const Investor = () => {
               <span className="text-orange-300 text-xs font-bold">CHAINLINK ACTIVE</span>
             </div>
             <div className="text-gray-400 text-sm">
-              <span className="text-gray-300 font-medium">{account}</span>
+              <span className="text-gray-300 font-medium">{formatAddress(address)}</span>
             </div>
           </div>
         </nav>
@@ -356,40 +428,40 @@ const Investor = () => {
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* Updated Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
           {[
             {
               value: stats.totalInvoices,
               label: "Total Invoices",
-              change: "Available",
+              change: "All invoices",
               icon: "📄",
-              gradient: "from-cyan-200/1 to-blue-700/15",
+              gradient: "from-cyan-200/1 to-blue-700/20",
               border: "border-cyan-500/40"
             },
             {
-              value: `${(stats.totalValue / 1000).toFixed(0)}K`,
-              label: "Total Value",
-              change: "Pool size",
-              icon: "💰",
-              gradient: "from-emerald-200/1 to-green-700/20",
-              border: "border-emerald-500/40"
-            },
-            {
-              value: stats.openInvoices,
-              label: "Open",
-              change: "Ready to fund",
-              icon: "🟢",
+              value: stats.readyForFunding,
+              label: "Ready for Funding",
+              change: "Available to invest",
+              icon: "💎",
               gradient: "from-purple-200/1 to-purple-700/20",
               border: "border-purple-500/40"
             },
             {
-              value: stats.activeInvoices,
-              label: "Active",
-              change: "Earning returns",
-              icon: "⚡",
-              gradient: "from-orange-200/1 to-orange-700/20",
-              border: "border-orange-500/40"
+              value: stats.verificationPending + stats.verificationInProgress,
+              label: "Under Review",
+              change: "Pending verification",
+              icon: "🔄",
+              gradient: "from-yellow-200/1 to-yellow-700/20",
+              border: "border-yellow-500/40"
+            },
+            {
+              value: stats.paid,
+              label: "Completed",
+              change: "Paid invoices",
+              icon: "✅",
+              gradient: "from-green-200/1 to-green-700/20",
+              border: "border-green-500/40"
             }
           ].map((stat, index) => (
             <div
@@ -408,125 +480,159 @@ const Investor = () => {
                   {stat.change}
                 </div>
               </div>
+              {/* Subtle glow effect on hover */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             </div>
           ))}
         </div>
 
-        {/* Filter Tabs */}
+        {/* Updated Filter Tabs */}
         <div className="flex flex-wrap gap-4 mb-8 justify-center">
           {[
-            { key: 'all', label: 'All Invoices', count: availableInvoices.length },
-            { key: 'open', label: 'Open', count: availableInvoices.filter(inv => inv.status === 'Open').length },
-            { key: 'funding', label: 'Funding', count: availableInvoices.filter(inv => inv.status === 'Funding').length },
-            { key: 'funded', label: 'Funded', count: availableInvoices.filter(inv => inv.status === 'Funded').length },
-            { key: 'paid', label: 'Paid by Buyer', count: availableInvoices.filter(inv => inv.status === 'Paid').length }
+            {
+              key: 'all',
+              label: 'All Invoices',
+              count: availableInvoices.length,
+            },
+            {
+              key: 'readyforfunding',
+              label: 'Ready for Funding',
+              count: availableInvoices.filter(inv => inv.status === 'ReadyForFunding').length,
+            },
+            {
+              key: 'verificationpending',
+              label: 'Verification Pending',
+              count: availableInvoices.filter(inv => inv.status === 'VerificationPending').length,
+            },
+            {
+              key: 'verificationinprogress',
+              label: 'Under Verification',
+              count: availableInvoices.filter(inv => inv.status === 'VerificationInProgress').length,
+            },
+            {
+              key: 'paid',
+              label: 'Paid',
+              count: availableInvoices.filter(inv => getDisplayStatus(inv.contractStatus || inv.status) === 'Paid').length,
+            }
           ].map((filter) => (
             <button
               key={filter.key}
               onClick={() => setFilterStatus(filter.key)}
-              className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 ${filterStatus === filter.key
+              className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center space-x-2 ${filterStatus === filter.key
                 ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
-                : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl cursor-pointer'
+                : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl cursor-pointer hover:transform'
                 }`}
             >
-              {filter.label} ({filter.count})
+              <span className="text-sm">{filter.icon}</span>
+              <span>{filter.label} ({filter.count})</span>
             </button>
           ))}
         </div>
 
-        {/* Invoice Grid */}
+        {/* Updated Invoice Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredInvoices.map((invoice) => (
-            <div
-              key={invoice.id}
-              className="relative backdrop-blur-2xl border border-gray-700/50 rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden bg-gradient-to-br from-gray-800/40 to-gray-700/40 hover:border-gray-600/70 hover:shadow-xl hover:shadow-purple-500/20"
-            >
-              <div className="relative z-10">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-lg font-black text-white">#{invoice.id}</div>
-                  {getStatusBadge(invoice.status)}
-                </div>
+          {filteredInvoices.map((invoice) => {
+            const displayStatus = invoice.status;
+            const buttonConfig = getButtonConfig(invoice);
+            const investable = isInvestable(invoice);
 
-                {/* Amount */}
-                <div className="mb-4">
-                  <div className="text-3xl font-black text-white mb-1">
-                    ${invoice.amount.toLocaleString()}
+            return (
+              <div
+                key={invoice.id}
+                className={`relative backdrop-blur-2xl border rounded-2xl p-6 transition-all duration-500 cursor-pointer group overflow-hidden bg-gradient-to-br ${investable
+                  ? 'border-gray-700/50 from-gray-800/40 to-gray-700/40 hover:transform hover:scale-105 hover:border-gray-600/70 hover:shadow-xl hover:shadow-purple-500/20'
+                  : 'border-gray-800/30 from-gray-900/20 to-gray-800/20 opacity-75 hover:opacity-90'
+                  }`}
+              >
+                <div className="relative z-10">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`text-lg font-black ${investable ? 'text-white' : 'text-gray-400'}`}>
+                      #{invoice.id}
+                    </div>
+                    {getStatusBadge(displayStatus)}
                   </div>
-                  <div className="text-gray-400 text-sm">
-                    {invoice.status === 'Paid' ? 'Paid by buyer' : `Due in ${invoice.daysToPayment} days`}
-                  </div>
-                </div>
 
-                {/* Funding Progress */}
-                {invoice.status === 'Funding' && (
+                  {/* Amount */}
                   <div className="mb-4">
+                    <div className={`text-3xl font-black mb-1 ${investable ? 'text-white' : 'text-gray-500'}`}>
+                      ${invoice.amount.toLocaleString()}
+                    </div>
+                    <div className="text-gray-400 text-sm">
+                      {displayStatus === 'Paid' ? 'Paid by buyer' :
+                        displayStatus === 'ReadyForFunding' ? `Due in ${invoice.daysToPayment || 'N/A'} days` :
+                          `Status: ${displayStatus}`}
+                    </div>
+                  </div>
+
+                  {/* Funding Progress - only show for ReadyForFunding status */}
+                  {displayStatus === 'ReadyForFunding' && invoice.fundedAmount !== undefined && (
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-gray-400 text-xs font-medium">FUNDING PROGRESS</span>
+                        <span className="text-white text-xs font-bold">
+                          {((invoice.fundedAmount / invoice.amount) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-700/50 rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-purple-500 to-cyan-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${(invoice.fundedAmount / invoice.amount) * 100}%` }}
+                        />
+                      </div>
+                      <div className="text-gray-400 text-xs mt-1">
+                        ${invoice.fundedAmount.toLocaleString()} / ${invoice.amount.toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Invoice Details */}
+                  <div className="bg-white/5 rounded-xl p-4 mb-4">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-400 text-xs font-medium">FUNDING PROGRESS</span>
-                      <span className="text-white text-xs font-bold">
-                        {getFundingProgress(invoice.fundedAmount, invoice.amount).toFixed(0)}%
+                      <span className="text-gray-400 text-xs font-medium">SUPPLIER</span>
+                      <span className={`font-medium text-sm ${investable ? 'text-white' : 'text-gray-400'}`}>
+                        {invoice.supplier}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-700/50 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-purple-500 to-cyan-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${getFundingProgress(invoice.fundedAmount, invoice.amount)}%` }}
-                      />
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-400 text-xs font-medium">BUYER</span>
+                      <span className={`font-medium text-sm ${investable ? 'text-white' : 'text-gray-400'}`}>
+                        {invoice.buyer}
+                      </span>
                     </div>
-                    <div className="text-gray-400 text-xs mt-1">
-                      ${invoice.fundedAmount.toLocaleString()} / ${invoice.amount.toLocaleString()}
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-xs font-medium">DUE DATE</span>
+                      <span className={`font-medium text-sm ${investable ? 'text-white' : 'text-gray-400'}`}>
+                        {new Date(invoice.dueDate).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
-                )}
 
-                {/* Invoice Details */}
-                <div className="bg-white/5 rounded-xl p-4 mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400 text-xs font-medium">SUPPLIER</span>
-                    <span className="text-white font-medium text-sm">{invoice.supplier}</span>
+                  {/* Description */}
+                  <div className="mb-6">
+                    <div className="text-gray-400 text-xs font-medium mb-1">DESCRIPTION</div>
+                    <div className={`text-sm ${investable ? 'text-gray-300' : 'text-gray-500'}`}>
+                      {invoice.description}
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400 text-xs font-medium">BUYER</span>
-                    <span className="text-white font-medium text-sm">{invoice.buyer}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-xs font-medium">DUE DATE</span>
-                    <span className="text-white font-medium text-sm">{new Date(invoice.dueDate).toLocaleDateString()}</span>
-                  </div>
-                </div>
 
-                {/* Description */}
-                <div className="mb-6">
-                  <div className="text-gray-400 text-xs font-medium mb-1">DESCRIPTION</div>
-                  <div className="text-gray-300 text-sm">{invoice.description}</div>
-                </div>
-
-                {/* Action Button */}
-                <button
-                  onClick={() => handleInvest(invoice)}
-                  disabled={invoice.status === 'Paid'}
-                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-300 transform hover:scale-105 shadow-lg overflow-hidden border group ${invoice.status === 'Open' || invoice.status === 'Funding'
-                    ? "w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
-                    : invoice.status === 'Paid'
-                      ? 'bg-gray-700/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
-                      : 'bg-green-600/50 text-green-300 border-green-500/30 cursor-default'
-                    }`}
-                >
-                  <span className="relative z-10 flex items-center justify-center space-x-2">
-                    <span>
-                      {invoice.status === 'Open' ? '💎 Invest Now' :
-                        invoice.status === 'Funding' ? '⚡ Add Investment' :
-                          invoice.status === 'Funded' ? '✅ Fully Funded' :
-                            '✨ Paid by Buyer'}
+                  {/* Action Button */}
+                  <button
+                    onClick={() => investable ? handleInvest(invoice) : null}
+                    disabled={buttonConfig.disabled}
+                    className={buttonConfig.className}
+                  >
+                    <span className="relative z-10 flex items-center justify-center space-x-2">
+                      <span>{buttonConfig.text}</span>
                     </span>
-                  </span>
-                  {(invoice.status === 'Open' || invoice.status === 'Funding') && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-                  )}
-                </button>
+                    {buttonConfig.showShimmer && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 
@@ -640,11 +746,19 @@ const Investor = () => {
                 <span className="text-gray-400 font-medium">Days to Payment</span>
                 <span className="text-white font-bold">{selectedInvoice.daysToPayment} days</span>
               </div>
+              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
+                <span className="text-gray-400 font-medium">Token Address</span>
+                <span className="text-white font-bold">{/*getTokenAddress(selectedInvoice.id)*/}</span>
+              </div>
+              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
+                <span className="text-gray-400 font-medium">Price of One Token</span>
+                <span className="text-white font-bold">{/*getPriceOfOneTokenInEth(selectedInvoice.id)*/}ETH</span>
+              </div>
             </div>
 
             <div className="mb-6">
               <label className="block text-gray-300 text-sm font-medium mb-2">
-                Investment Amount
+                Enter the amount of Tokens you want to buy
               </label>
               <input
                 type="number"
@@ -658,7 +772,7 @@ const Investor = () => {
             <div className="flex space-x-4">
               <button
                 onClick={() => setSelectedInvoice(null)}
-                className="flex-1 py-3 bg-gray-700/50 text-gray-300 rounded-xl font-bold hover:bg-gray-600/50 transition-all duration-300"
+                className="flex-2 py-3 px-3 bg-gray-700/50 text-gray-300 rounded-xl font-bold hover:bg-gray-600/50 transition-all duration-300"
               >
                 Cancel
               </button>
