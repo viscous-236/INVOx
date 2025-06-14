@@ -10,7 +10,6 @@ const UnifiedSupplierDashboard = () => {
     id: '', buyer: '', amount: '', dueDate: ''
   });
   const [verifyId, setVerifyId] = useState('');
-  const [verifyAmount, setVerifyAmount] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [invoices, setInvoices] = useState([]);
@@ -20,13 +19,13 @@ const UnifiedSupplierDashboard = () => {
 
   const { address, contract, isConnected } = useWallet();
 
-  // Status mapping from contract to UI
+  // Status mapping from contract to UI - Updated according to your contract
   const statusMap = {
-    0: 'Pending',    // PENDING
-    1: 'Verified',   // VERIFIED 
-    2: 'Approved',   // APPROVED
-    3: 'Rejected',       // PAID
-    4: 'Paid'    // REJECTED
+    0: 'Pending',              // Pending
+    1: 'Verification In Progress', // VerificationInProgress
+    2: 'Approved',             // Approved
+    3: 'Rejected',             // Rejected
+    4: 'Paid'                  // Paid
   };
 
   useEffect(() => {
@@ -61,14 +60,12 @@ const UnifiedSupplierDashboard = () => {
       // Get supplier's invoice IDs
       const supplierInvoiceIds = await contract.getSupplierInvoices(address);
       console.log('Supplier Invoice IDs:', supplierInvoiceIds);
+      
       // Fetch details for each invoice
       const invoicePromises = supplierInvoiceIds.map(async (invoiceId) => {
         try {
           const invoiceDetails = await contract.getInvoiceDetails(invoiceId);
           console.log(`Invoice ${invoiceId} details:`, invoiceDetails);
-          // const tokenDetails = await contract.getTokenDetails(invoiceId);
-          // console.log(`Token details for invoice ${invoiceId}:`, tokenDetails);
-
 
           return {
             id: Number(invoiceDetails.id),
@@ -76,8 +73,10 @@ const UnifiedSupplierDashboard = () => {
             amount: Number(ethers.formatEther(invoiceDetails.amount)),
             dueDate: new Date(Number(invoiceDetails.dueDate) * 1000).toISOString().split('T')[0],
             status: statusMap[invoiceDetails.status] || 'Unknown',
+            statusCode: Number(invoiceDetails.status),
             totalInvestment: Number(ethers.formatEther(invoiceDetails.totalInvestment)),
-            isPaid: invoiceDetails.isPaid
+            isPaid: invoiceDetails.isPaid,
+            investors: invoiceDetails.investors
           };
         } catch (err) {
           console.error(`Error loading invoice ${invoiceId}:`, err);
@@ -98,21 +97,23 @@ const UnifiedSupplierDashboard = () => {
   const filteredInvoices = useMemo(() => {
     return filterStatus === 'all'
       ? invoices
-      : invoices.filter(inv => inv.status.toLowerCase() === filterStatus);
+      : invoices.filter(inv => inv.status.toLowerCase().includes(filterStatus.toLowerCase()));
   }, [invoices, filterStatus]);
 
   const stats = useMemo(() => {
-    const pending = invoices.filter(inv => inv.status === 'Pending').length;
-    const verified = invoices.filter(inv => inv.status === 'Verified').length;
-    const approved = invoices.filter(inv => inv.status === 'Approved').length;
-    const paid = invoices.filter(inv => inv.status === 'Paid').length;
+    const pending = invoices.filter(inv => inv.statusCode === 0).length;
+    const verificationInProgress = invoices.filter(inv => inv.statusCode === 1).length;
+    const approved = invoices.filter(inv => inv.statusCode === 2).length;
+    const rejected = invoices.filter(inv => inv.statusCode === 3).length;
+    const paid = invoices.filter(inv => inv.statusCode === 4).length;
     const totalValue = invoices.reduce((sum, inv) => sum + inv.amount, 0);
 
     return {
       totalInvoices: invoices.length,
       pending,
-      verified,
+      verificationInProgress,
       approved,
+      rejected,
       paid,
       totalValue
     };
@@ -123,8 +124,6 @@ const UnifiedSupplierDashboard = () => {
       alert('Please connect your wallet first');
       return;
     }
-    console.log('contract', contract);
-    console.log('address', address);
 
     const { id, buyer, amount, dueDate } = newInvoice;
 
@@ -139,13 +138,20 @@ const UnifiedSupplierDashboard = () => {
       return;
     }
 
+    // Check if due date is in the future
+    const dueDateObj = new Date(dueDate);
+    const now = new Date();
+    if (dueDateObj <= now) {
+      alert('Due date must be in the future');
+      return;
+    }
+
     console.log('Creating invoice with data:', { id, buyer, amount, dueDate });
 
     setLoading(true);
     try {
       // Check if invoice ID already exists
       const exists = await contract.IdExists(id);
-      console.log('Invoice ID exists:', exists);
       if (exists) {
         alert('Invoice ID already exists. Please use a different ID.');
         return;
@@ -153,9 +159,7 @@ const UnifiedSupplierDashboard = () => {
 
       // Convert amount to wei and dueDate to timestamp
       const amountInWei = ethers.parseEther(amount.toString());
-      const dueDateTimestamp = Math.floor(new Date(dueDate).getTime() / 1000);
-      console.log('Amount in wei:', amountInWei.toString());
-      console.log('Due date timestamp:', dueDateTimestamp);
+      const dueDateTimestamp = Math.floor(dueDateObj.getTime() / 1000);
 
       // Create invoice on blockchain
       const tx = await contract.createInvoice(
@@ -166,84 +170,179 @@ const UnifiedSupplierDashboard = () => {
       );
 
       await tx.wait();
-      console.log('Invoice created successfully:');
-
       alert('Invoice created successfully!');
-      setNewInvoice({ id: '', buyer: '', amount: '', dueDate: '', });
+      setNewInvoice({ id: '', buyer: '', amount: '', dueDate: '' });
 
       // Reload invoices
       await loadSupplierInvoices();
 
     } catch (err) {
       console.error('Error creating invoice:', err);
-      alert('Failed to create invoice. Please try again.');
+      
+      // Provide specific error messages based on contract errors
+      if (err.message.includes('Main__MustBeUnique')) {
+        alert('Invoice ID already exists. Please use a different ID.');
+      } else if (err.message.includes('Main__CallerMustBeSupplier')) {
+        alert('Only suppliers can create invoices');
+      } else if (err.message.includes('Main__DueDateMustBeInFuture')) {
+        alert('Due date must be in the future');
+      } else if (err.message.includes('Main__MoreThanZero')) {
+        alert('Amount and ID must be greater than zero');
+      } else if (err.message.includes('Main__MustBeValidAddress')) {
+        alert('Please enter a valid buyer address');
+      } else {
+        alert('Failed to create invoice. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerify = async () => {
-    if (!contract || !isConnected) {
-      alert('Please connect your wallet first');
+const handleVerify = async () => {
+  if (!contract || !isConnected) {
+    alert('Please connect your wallet first');
+    return;
+  }
+
+  if (!verifyId) {
+    alert('Please enter an invoice ID to verify');
+    return;
+  }
+
+  const invoiceId = parseInt(verifyId);
+  console.log('=== VERIFICATION DEBUG START ===');
+  console.log('Invoice ID to verify:', invoiceId);
+  console.log('Connected address:', address);
+  console.log('Contract address:', contract?.target || contract?.address);
+
+  setLoading(true);
+  try {
+    // Step 1: Check if invoice exists using IdExists
+    console.log('Step 1: Checking if invoice exists...');
+    const exists = await contract.IdExists(invoiceId);
+    console.log('Invoice exists:', exists);
+    
+    if (!exists) {
+      alert('Invoice does not exist');
       return;
     }
 
-    if (!verifyId) {
-      alert('Please enter an invoice ID to verify');
+    // Step 2: Get invoice details using getInvoice (not getInvoiceDetails)
+    console.log('Step 2: Getting invoice details...');
+    const invoice = await contract.getInvoice(invoiceId);
+    console.log('Raw invoice data:', invoice);
+    
+    // Parse the invoice data based on your contract structure
+    const invoiceData = {
+      id: Number(invoice.id || invoice[0]),
+      supplier: invoice.supplier || invoice[1],
+      buyer: invoice.buyer || invoice[2],
+      amount: invoice.amount || invoice[3],
+      dueDate: Number(invoice.dueDate || invoice[4]),
+      status: Number(invoice.status || invoice[5]),
+      totalInvestment: invoice.totalInvestment || invoice[6],
+      isPaid: invoice.isPaid || invoice[7]
+    };
+    
+    console.log('Parsed invoice data:', invoiceData);
+    console.log('Invoice supplier:', invoiceData.supplier);
+    console.log('Current user address:', address);
+    console.log('Addresses match:', invoiceData.supplier.toLowerCase() === address.toLowerCase());
+    console.log('Invoice status:', invoiceData.status);
+
+    // Step 3: Verify ownership
+    if (invoiceData.supplier.toLowerCase() !== address.toLowerCase()) {
+      alert('You can only verify your own invoices');
+      console.log('ERROR: User is not the supplier of this invoice');
       return;
     }
 
-    if (!verifyAmount) {
-      alert('Please enter the amount to verify');
+    // Step 4: Check status - must be Pending (0)
+    if (invoiceData.status !== 0) {
+      alert(`Invoice must be in Pending status to verify. Current status: ${statusMap[invoiceData.status] || invoiceData.status}`);
+      console.log('ERROR: Invoice status is not Pending. Current status:', invoiceData.status);
       return;
     }
 
-    setLoading(true);
+    // Step 5: Check user role
+    console.log('Step 5: Checking user role...');
+    const userRole = await contract.getUserRole(address);
+    console.log('User role:', Number(userRole));
+    
+    if (Number(userRole) !== 0) { // 0 = Supplier
+      alert('Only suppliers can verify invoices');
+      console.log('ERROR: User is not a supplier. Role:', Number(userRole));
+      return;
+    }
+
+    // Step 6: Estimate gas before transaction
+    console.log('Step 6: Estimating gas for verification...');
     try {
-      const userRole = await contract.getUserRole(address);
-      console.log('User role:', userRole.toString());
+      const gasEstimate = await contract.verifyInvoice.estimateGas(invoiceId);
+      console.log('Gas estimate:', gasEstimate.toString());
+    } catch (gasError) {
+      console.error('Gas estimation failed:', gasError);
+      alert('Transaction will likely fail. Check console for details.');
+      return;
+    }
 
-      // Get invoice details first
-      const invoice = await contract.getInvoice(parseInt(verifyId));
-      console.log('Invoice details:', {
-        supplier: invoice.supplier,
-        status: invoice.status.toString(),
-        amount: invoice.amount.toString()
-      });
+    // Step 7: Execute verification with explicit gas settings
+    console.log('Step 7: Executing verification transaction...');
+    const tx = await contract.verifyInvoice(invoiceId, {
+      gasLimit: 500000, // Set explicit gas limit
+      // You might also want to set gasPrice if needed
+    });
 
-      if (invoice.supplier !== address) {
-        alert('You can only verify your own invoices');
-        return;
-      }
-
-      console.log('About to call verifyInvoice with:', {
-        id: Number(parseInt(verifyId)),
-        amount: Math.round(parseFloat(verifyAmount) * 100)
-      });
-
-      // Verify invoice
-      const tx = await contract.verifyInvoice(
-        Number(parseInt(verifyId)),
-        Math.round(parseFloat(verifyAmount) * 100),
-      );
-
-      await tx.wait();
+    console.log('Transaction sent:', tx.hash);
+    console.log('Waiting for confirmation...');
+    
+    const receipt = await tx.wait();
+    console.log('Transaction confirmed:', receipt);
+    console.log('Transaction status:', receipt.status);
+    
+    if (receipt.status === 1) {
       alert(`Invoice #${verifyId} verification requested successfully!`);
       setVerifyId('');
       await loadSupplierInvoices();
-
-    } catch (err) {
-      console.error('Error verifying invoice:', err);
-      alert('Failed to verify invoice. Please try again.');
-    } finally {
-      setLoading(false);
+    } else {
+      alert('Transaction failed. Check console for details.');
     }
-  };
+
+  } catch (err) {
+    console.error('=== VERIFICATION ERROR ===');
+    console.error('Error object:', err);
+    console.error('Error message:', err.message);
+    console.error('Error code:', err.code);
+    console.error('Error data:', err.data);
+    
+    // More specific error handling
+    if (err.message.includes('Main__InvoiceStatusMustBePending')) {
+      alert('Invoice must be in Pending status to verify');
+    } else if (err.message.includes('Main__CallerMustBeSupplier')) {
+      alert('Only suppliers can verify invoices');
+    } else if (err.message.includes('Main__InvoiceNotExist')) {
+      alert('Invoice does not exist');
+    } else if (err.message.includes('user rejected')) {
+      alert('Transaction was rejected by user');
+    } else if (err.message.includes('insufficient funds')) {
+      alert('Insufficient funds for gas fees');
+    } else if (err.message.includes('gas')) {
+      alert('Gas estimation failed or insufficient gas limit');
+    } else if (err.reason) {
+      alert(`Contract error: ${err.reason}`);
+    } else {
+      alert(`Verification failed: ${err.message || 'Unknown error'}`);
+    }
+  } finally {
+    setLoading(false);
+    console.log('=== VERIFICATION DEBUG END ===');
+  }
+};
 
   const getStatusColor = (status) => {
     const colors = {
       'Pending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
-      'Verified': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+      'Verification In Progress': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
       'Approved': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
       'Paid': 'bg-green-500/20 text-green-400 border-green-500/40',
       'Rejected': 'bg-red-500/20 text-red-400 border-red-500/40'
@@ -254,7 +353,7 @@ const UnifiedSupplierDashboard = () => {
   const getStatusIcon = (status) => {
     const icons = {
       'Pending': '⏳',
-      'Verified': '🔍',
+      'Verification In Progress': '🔍',
       'Approved': '✅',
       'Paid': '🏦',
       'Rejected': '❌'
@@ -291,26 +390,37 @@ const UnifiedSupplierDashboard = () => {
     setSelectedInvoice(invoice);
   };
 
+  // Check user role on component mount
   useEffect(() => {
     const checkUserRole = async () => {
       if (contract && address) {
-        const role = await contract.getUserRole(address);
-        const roleInNum = Number(role);
-        if (roleInNum !== 0) {
-          alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
-          navigate('/');
-        } else {
+        try {
+          const role = await contract.getUserRole(address);
+          const roleInNum = Number(role);
+          
+          // UserRole.Supplier = 0 in your contract
+          if (roleInNum !== 0) {
+            alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
+            navigate('/');
+            return;
+          }
+          
           await loadSupplierInvoices();
+        } catch (err) {
+          console.error('Error checking user role:', err);
+          alert('Error checking user permissions. Please try again.');
+          navigate('/');
         }
       } else {
         alert('Please connect your wallet to access the Supplier dashboard.');
         navigate('/');
       }
+    };
+    
+    if (isConnected) {
+      checkUserRole();
     }
-    checkUserRole();
-  }, [navigate, address]);
-
-
+  }, [contract, address, isConnected, navigate]);
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
       {/* Background Pattern */}
@@ -501,13 +611,7 @@ const UnifiedSupplierDashboard = () => {
                 onChange={(e) => setVerifyId(e.target.value)}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-300"
               />
-              <input
-                type="amount"
-                placeholder="Amount to verify (USD)"
-                value={verifyAmount}
-                onChange={(e) => setVerifyAmount(e.target.value)}
-                className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-300"
-              />
+          
               <button
                 onClick={handleVerify}
                 className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
