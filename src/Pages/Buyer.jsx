@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
+import { useWallet } from '../WalletContext';
 
 
 const BuyerMarketplace = () => {
@@ -9,8 +10,25 @@ const BuyerMarketplace = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [filterStatus, setFilterStatus] = useState('all');
   const [scrollY, setScrollY] = useState(0);
-  const [account, setAccount] = useState(null);
   const navigate = useNavigate();
+
+  // Invoice status enum mapping
+  const INVOICE_STATUS = {
+    0: 'Pending',
+    1: 'Approved',
+    2: 'Verified',
+    3: 'Funded',
+    4: 'Paid',
+    5: 'Overdue'
+  };
+
+  const USER_ROLE = {
+    0: 'None',
+    1: 'Supplier',
+    2: 'Buyer',
+    3: 'Investor'
+  };
+
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -28,57 +46,7 @@ const BuyerMarketplace = () => {
     };
   }, []);
 
-  useEffect(() => {
-    getConnectedAccount();
-  }, []);
-
-  useEffect(() => {
-    const handleAccountsChanged = (accounts) => {
-      if (accounts.length === 0) {
-        console.log("Account: Disconnected");
-        setAccount(null);
-        navigate("/");
-      } else {
-        const newAccount = accounts[0];
-        if (newAccount !== account) {
-          console.log("Account changed:", newAccount);
-          setAccount(newAccount);
-          navigate("/");
-        }
-      }
-    };
-
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
-    }
-
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      }
-    };
-  }, [account, navigate]);
-
-  const getConnectedAccount = async () => {
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          console.log("Retrieved connected account:", accounts[0]);
-        } else {
-          console.log("No connected accounts found");
-          navigate("/");
-        }
-      } catch (error) {
-        console.error('Error getting connected account:', error);
-        navigate("/");
-      }
-    } else {
-      alert('Please install MetaMask to connect your wallet.');
-      navigate("/");
-    }
-  };
+  const { account, address, isConnected, contract } = useWallet();
 
   // Sample invoice data
   const [invoices] = useState([
