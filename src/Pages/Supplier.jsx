@@ -50,17 +50,46 @@ const UnifiedSupplierDashboard = () => {
     }
   }, [contract, address, isConnected]);
 
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (contract && address) {
+        try {
+          const role = await contract.getUserRole(address);
+          const roleInNum = Number(role);
+
+          if (roleInNum !== 0) {
+            alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
+            navigate('/');
+            return;
+          }
+
+          await loadSupplierInvoices();
+        } catch (err) {
+          console.error('Error checking user role:', err);
+          alert('Error checking user permissions. Please try again.');
+          navigate('/');
+        }
+      } else {
+        alert('Please connect your wallet to access the Supplier dashboard.');
+        navigate('/');
+      }
+    };
+
+    if (isConnected) {
+      checkUserRole();
+    }
+  }, [contract, address, isConnected, navigate]);
+
   const loadSupplierInvoices = async () => {
     if (!contract || !address) return;
 
-    setLoading(true);
     setError('');
 
     try {
       // Get supplier's invoice IDs
       const supplierInvoiceIds = await contract.getSupplierInvoices(address);
       console.log('Supplier Invoice IDs:', supplierInvoiceIds);
-      
+
       // Fetch details for each invoice
       const invoicePromises = supplierInvoiceIds.map(async (invoiceId) => {
         try {
@@ -90,7 +119,6 @@ const UnifiedSupplierDashboard = () => {
       console.error('Error loading supplier invoices:', err);
       setError('Failed to load invoices');
     } finally {
-      setLoading(false);
     }
   };
 
@@ -178,7 +206,7 @@ const UnifiedSupplierDashboard = () => {
 
     } catch (err) {
       console.error('Error creating invoice:', err);
-      
+
       // Provide specific error messages based on contract errors
       if (err.message.includes('Main__MustBeUnique')) {
         alert('Invoice ID already exists. Please use a different ID.');
@@ -198,34 +226,95 @@ const UnifiedSupplierDashboard = () => {
     }
   };
 
-const handleVerify = async () => {
-  if (!contract || !isConnected) {
-    alert('Please connect your wallet first');
-    return;
-  }
 
-  if (!verifyId) {
-    alert('Please enter an invoice ID to verify');
-    return;
-  }
+  // Add this useEffect hook to set up the event listener
+  useEffect(() => {
+    if (!contract) return;
 
-  const invoiceId = parseInt(verifyId);
-  console.log('=== VERIFICATION DEBUG START ===');
-  console.log('Invoice ID to verify:', invoiceId);
-  console.log('Connected address:', address);
-  console.log('Contract address:', contract?.target || contract?.address);
+    let isSubscribed = true; // Prevent state updates after unmount
 
-  setLoading(true);
-  try {
-    // Step 1: Check if invoice exists using IdExists
-    console.log('Step 1: Checking if invoice exists...');
-    const exists = await contract.IdExists(invoiceId);
-    console.log('Invoice exists:', exists);
-    
-    if (!exists) {
-      alert('Invoice does not exist');
+    const handleInvoiceVerified = (invoiceId, isValid, event) => {
+      console.log('InvoiceVerified event received:', {
+        invoiceId: invoiceId.toString(),
+        isValid,
+        transactionHash: event.transactionHash
+      });
+
+      // Only update UI if component is still mounted
+      if (!isSubscribed) return;
+
+      // Update UI based on verification result
+      if (isValid) {
+        alert(`Invoice #${invoiceId.toString()} has been approved!`);
+      } else {
+        alert(`Invoice #${invoiceId.toString()} has been rejected.`);
+      }
+
+      // Refresh the supplier invoices list
+      loadSupplierInvoices();
+    };
+
+    // Set up event listener with error handling
+    try {
+      contract.on('InvoiceVerified', handleInvoiceVerified);
+    } catch (error) {
+      console.error('Failed to set up event listener:', error);
+      setLoading(false);
+    }
+
+    // Cleanup function
+    return () => {
+      isSubscribed = false;
+      try {
+        contract.off('InvoiceVerified', handleInvoiceVerified);
+      } catch (error) {
+        console.error('Failed to remove event listener:', error);
+      }
+    };
+  }, [contract]);
+
+  useEffect(() => {
+    if (!contract) return;
+
+    const pollForUpdates = setInterval(async () => {
+      try {
+        await loadSupplierInvoices();
+      } catch (error) {
+        console.error('Polling failed:', error);
+      }
+    }, 20000);
+
+    return () => clearInterval(pollForUpdates);
+  }, [contract]);
+
+  // Modified handleVerify function - remove the manual success alert
+  const handleVerify = async () => {
+    if (!contract || !isConnected) {
+      alert('Please connect your wallet first');
       return;
     }
+
+    if (!verifyId || verifyId.trim() === '') {
+      alert('Please enter an invoice ID to verify');
+      return;
+    }
+
+    const invoiceId = parseInt(verifyId);
+
+    if (isNaN(invoiceId) || invoiceId < 0) {
+      alert('Please enter a valid invoice ID (positive number)');
+      return;
+    }
+    console.log('=== VERIFICATION DEBUG START ===');
+    console.log('Invoice ID to verify:', invoiceId);
+
+    setLoading(true);
+    try {
+      const exists = await contract.IdExists(invoiceId);
+      if (!exists) {
+        alert('Invoice does not exist');
+        return;
+      }
 
     // Step 2: Get invoice details using getInvoice
     console.log('Step 2: Getting invoice details...');
@@ -257,6 +346,13 @@ const handleVerify = async () => {
       console.log('ERROR: User is not the supplier of this invoice');
       return;
     }
+      const invoice = await contract.getInvoice(invoiceId);
+
+      // Verify ownership
+      if (invoice.supplier.toLowerCase() !== address.toLowerCase()) {
+        alert('You can only verify your own invoices');
+        return;
+      }
 
     // Step 4: Check status - must be Pending (0)
     const statusMap = {
@@ -272,6 +368,11 @@ const handleVerify = async () => {
       console.log('ERROR: Invoice status is not Pending. Current status:', invoiceData.status);
       return;
     }
+      // Check status
+      if (Number(invoice.status) !== 0) {
+        alert(`Invoice must be in Pending status to verify. Current status: ${invoice.status}`);
+        return;
+      }
 
     // Step 5: Check user role - must be Supplier (0)
     console.log('Step 5: Checking user role...');
@@ -283,6 +384,12 @@ const handleVerify = async () => {
       console.log('ERROR: User is not a supplier. Role:', Number(userRole));
       return;
     }
+      // Check user role
+      const userRole = await contract.getUserRole(address);
+      if (Number(userRole) !== 0) {
+        alert('Only suppliers can verify invoices');
+        return;
+      }
 
     // Step 6: Check if user has chosen a role
     console.log('Step 6: Checking if user has chosen a role...');
@@ -354,6 +461,20 @@ const handleVerify = async () => {
     } else {
       alert('Transaction failed. Check console for details.');
     }
+      // Execute verification
+      const tx = await contract.verifyInvoice(invoiceId);
+      console.log('Transaction sent:', tx.hash);
+
+      const receipt = await tx.wait();
+      console.log('Transaction confirmed:', receipt);
+
+      if (receipt.status === 1) {
+        // Don't show success alert here - event listener will handle it
+        console.log('Verification transaction successful, waiting for event...');
+        setVerifyId('');
+      } else {
+        alert('Transaction failed. Check console for details.');
+      }
 
   } catch (err) {
     console.error('=== VERIFICATION ERROR ===');
@@ -395,6 +516,25 @@ const handleVerify = async () => {
     console.log('=== VERIFICATION DEBUG END ===');
   }
 };
+    } catch (err) {
+      console.error('=== VERIFICATION ERROR ===', err);
+
+      if (err.message.includes('Main__InvoiceStatusMustBePending')) {
+        alert('Invoice must be in Pending status to verify');
+      } else if (err.message.includes('Main__CallerMustBeSupplier')) {
+        alert('Only suppliers can verify invoices');
+      } else if (err.message.includes('Main__InvoiceNotExist')) {
+        alert('Invoice does not exist');
+      } else if (err.message.includes('user rejected')) {
+        alert('Transaction was rejected by user');
+      } else {
+        alert(`Verification failed: ${err.message || 'Unknown error'}`);
+      }
+    } finally {
+      console.log('=== VERIFICATION DEBUG END ===');
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -448,36 +588,7 @@ const handleVerify = async () => {
   };
 
   // Check user role on component mount
-  useEffect(() => {
-    const checkUserRole = async () => {
-      if (contract && address) {
-        try {
-          const role = await contract.getUserRole(address);
-          const roleInNum = Number(role);
-          
-          // UserRole.Supplier = 0 in your contract
-          if (roleInNum !== 0) {
-            alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
-            navigate('/');
-            return;
-          }
-          
-          await loadSupplierInvoices();
-        } catch (err) {
-          console.error('Error checking user role:', err);
-          alert('Error checking user permissions. Please try again.');
-          navigate('/');
-        }
-      } else {
-        alert('Please connect your wallet to access the Supplier dashboard.');
-        navigate('/');
-      }
-    };
-    
-    if (isConnected) {
-      checkUserRole();
-    }
-  }, [contract, address, isConnected, navigate]);
+
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
       {/* Background Pattern */}
@@ -525,6 +636,42 @@ const handleVerify = async () => {
           </div>
         </nav>
       </header>
+
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Clean Gradient Backdrop */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/5 via-purple-700/5 to-cyan-600/50 backdrop-blur-md animate-in fade-in duration-300"></div>
+          <div className="absolute inset-0 bg-black/70"></div>
+
+          {/* Loading Content */}
+          <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+            {/* Subtle Background Pattern */}
+            <div className="absolute inset-0 w-96 h-96 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2">
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] opacity-20"></div>
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-80 w-80 rounded-full bg-gradient-to-r from-purple-900/10 via-purple-700/10 to-cyan-600/20 blur-3xl"></div>
+            </div>
+
+            {/* Clean Spinner */}
+            <div className="relative mb-8">
+              <div className="w-12 h-12 rounded-full border-2 border-gray-700/30 border-t-transparent bg-gradient-to-r from-purple-900/20 via-purple-700/20 to-cyan-600/40 animate-spin"></div>
+              <div className="absolute inset-1 w-10 h-10 rounded-full border-2 border-transparent border-t-white/80 animate-spin" style={{ animationDuration: '1.5s' }}></div>
+            </div>
+
+            {/* Professional Text */}
+            <div className="text-center">
+              <h2 className="text-xl font-medium text-white mb-2">
+                Loading
+              </h2>
+              <p className="text-gray-400 text-sm">Please wait a moment...</p>
+            </div>
+
+            {/* Minimal Progress Indicator */}
+            <div className="mt-6 w-32 h-1 bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-purple-900/50 via-purple-700/50 to-cyan-600/80 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="relative z-10 max-w-7xl mx-auto px-8 py-12 space-y-12">
         {/* Title */}
@@ -668,7 +815,7 @@ const handleVerify = async () => {
                 onChange={(e) => setVerifyId(e.target.value)}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-300"
               />
-          
+
               <button
                 onClick={handleVerify}
                 className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
