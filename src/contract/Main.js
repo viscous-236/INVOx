@@ -1,6 +1,6 @@
 import {ethers} from 'ethers';
 
-const CONTRACT_ADDRESS = '0xFF8657E8A1562cE1E51839E92201eF02689DA20b';
+const CONTRACT_ADDRESS = '0xaABb1F011a8671e79561fDfEF0A49528684D6710';
 
 const CONTRACT_ABI = [
   "event ContractFunded(address indexed sender, uint256 amount)",
