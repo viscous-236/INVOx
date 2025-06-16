@@ -1,6 +1,6 @@
 import {ethers} from 'ethers';
 
-const CONTRACT_ADDRESS = '0x08e2603365B3145F6c21Fb2ae1Af2bCFbcE26149';
+const CONTRACT_ADDRESS = '0x5dc21bBbAafED2870A68A2764Ff90f4C0743919b';
 
 
 const CONTRACT_ABI = [

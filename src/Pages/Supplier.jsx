@@ -50,10 +50,39 @@ const UnifiedSupplierDashboard = () => {
     }
   }, [contract, address, isConnected]);
 
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (contract && address) {
+        try {
+          const role = await contract.getUserRole(address);
+          const roleInNum = Number(role);
+
+          if (roleInNum !== 0) {
+            alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
+            navigate('/');
+            return;
+          }
+
+          await loadSupplierInvoices();
+        } catch (err) {
+          console.error('Error checking user role:', err);
+          alert('Error checking user permissions. Please try again.');
+          navigate('/');
+        }
+      } else {
+        alert('Please connect your wallet to access the Supplier dashboard.');
+        navigate('/');
+      }
+    };
+
+    if (isConnected) {
+      checkUserRole();
+    }
+  }, [contract, address, isConnected, navigate]);
+
   const loadSupplierInvoices = async () => {
     if (!contract || !address) return;
 
-    setLoading(true);
     setError('');
 
     try {
@@ -90,7 +119,6 @@ const UnifiedSupplierDashboard = () => {
       console.error('Error loading supplier invoices:', err);
       setError('Failed to load invoices');
     } finally {
-      setLoading(false);
     }
   };
 
@@ -203,12 +231,17 @@ const UnifiedSupplierDashboard = () => {
   useEffect(() => {
     if (!contract) return;
 
+    let isSubscribed = true; // Prevent state updates after unmount
+
     const handleInvoiceVerified = (invoiceId, isValid, event) => {
       console.log('InvoiceVerified event received:', {
         invoiceId: invoiceId.toString(),
         isValid,
         transactionHash: event.transactionHash
       });
+
+      // Only update UI if component is still mounted
+      if (!isSubscribed) return;
 
       // Update UI based on verification result
       if (isValid) {
@@ -221,13 +254,37 @@ const UnifiedSupplierDashboard = () => {
       loadSupplierInvoices();
     };
 
-    // Set up event listener
-    contract.on('InvoiceVerified', handleInvoiceVerified);
+    // Set up event listener with error handling
+    try {
+      contract.on('InvoiceVerified', handleInvoiceVerified);
+    } catch (error) {
+      console.error('Failed to set up event listener:', error);
+      setLoading(false);
+    }
 
-    // Cleanup function to remove listener
+    // Cleanup function
     return () => {
-      contract.off('InvoiceVerified', handleInvoiceVerified);
+      isSubscribed = false;
+      try {
+        contract.off('InvoiceVerified', handleInvoiceVerified);
+      } catch (error) {
+        console.error('Failed to remove event listener:', error);
+      }
     };
+  }, [contract]);
+
+  useEffect(() => {
+    if (!contract) return;
+
+    const pollForUpdates = setInterval(async () => {
+      try {
+        await loadSupplierInvoices();
+      } catch (error) {
+        console.error('Polling failed:', error);
+      }
+    }, 20000);
+
+    return () => clearInterval(pollForUpdates);
   }, [contract]);
 
   // Modified handleVerify function - remove the manual success alert
@@ -237,12 +294,17 @@ const UnifiedSupplierDashboard = () => {
       return;
     }
 
-    if (!verifyId) {
+    if (!verifyId || verifyId.trim() === '') {
       alert('Please enter an invoice ID to verify');
       return;
     }
 
     const invoiceId = parseInt(verifyId);
+
+    if (isNaN(invoiceId) || invoiceId < 0) {
+      alert('Please enter a valid invoice ID (positive number)');
+      return;
+    }
     console.log('=== VERIFICATION DEBUG START ===');
     console.log('Invoice ID to verify:', invoiceId);
 
@@ -305,8 +367,8 @@ const UnifiedSupplierDashboard = () => {
         alert(`Verification failed: ${err.message || 'Unknown error'}`);
       }
     } finally {
-      setLoading(false);
       console.log('=== VERIFICATION DEBUG END ===');
+      setLoading(false);
     }
   };
 
@@ -362,35 +424,7 @@ const UnifiedSupplierDashboard = () => {
   };
 
   // Check user role on component mount
-  useEffect(() => {
-    const checkUserRole = async () => {
-      if (contract && address) {
-        try {
-          const role = await contract.getUserRole(address);
-          const roleInNum = Number(role);
 
-          if (roleInNum !== 0) {
-            alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
-            navigate('/');
-            return;
-          }
-
-          await loadSupplierInvoices();
-        } catch (err) {
-          console.error('Error checking user role:', err);
-          alert('Error checking user permissions. Please try again.');
-          navigate('/');
-        }
-      } else {
-        alert('Please connect your wallet to access the Supplier dashboard.');
-        navigate('/');
-      }
-    };
-
-    if (isConnected) {
-      checkUserRole();
-    }
-  }, [contract, address, isConnected, navigate]);
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
       {/* Background Pattern */}
@@ -438,6 +472,42 @@ const UnifiedSupplierDashboard = () => {
           </div>
         </nav>
       </header>
+
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Clean Gradient Backdrop */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/5 via-purple-700/5 to-cyan-600/50 backdrop-blur-md animate-in fade-in duration-300"></div>
+          <div className="absolute inset-0 bg-black/70"></div>
+
+          {/* Loading Content */}
+          <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+            {/* Subtle Background Pattern */}
+            <div className="absolute inset-0 w-96 h-96 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2">
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] opacity-20"></div>
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-80 w-80 rounded-full bg-gradient-to-r from-purple-900/10 via-purple-700/10 to-cyan-600/20 blur-3xl"></div>
+            </div>
+
+            {/* Clean Spinner */}
+            <div className="relative mb-8">
+              <div className="w-12 h-12 rounded-full border-2 border-gray-700/30 border-t-transparent bg-gradient-to-r from-purple-900/20 via-purple-700/20 to-cyan-600/40 animate-spin"></div>
+              <div className="absolute inset-1 w-10 h-10 rounded-full border-2 border-transparent border-t-white/80 animate-spin" style={{ animationDuration: '1.5s' }}></div>
+            </div>
+
+            {/* Professional Text */}
+            <div className="text-center">
+              <h2 className="text-xl font-medium text-white mb-2">
+                Loading
+              </h2>
+              <p className="text-gray-400 text-sm">Please wait a moment...</p>
+            </div>
+
+            {/* Minimal Progress Indicator */}
+            <div className="mt-6 w-32 h-1 bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-purple-900/50 via-purple-700/50 to-cyan-600/80 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="relative z-10 max-w-7xl mx-auto px-8 py-12 space-y-12">
         {/* Title */}

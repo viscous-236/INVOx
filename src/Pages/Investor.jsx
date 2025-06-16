@@ -18,15 +18,6 @@ const Investor = () => {
 
   const { address, contract, isConnected, provider } = useWallet();
 
-  // Status mapping from contract uint8 to readable status
-  const STATUS_MAPPING = {
-    0: 'Pending',
-    1: 'VerificationInProgress',
-    2: 'Approved',
-    3: 'Rejected',
-    4: 'Paid'
-  };
-
   // Convert contract status to display status
   const getDisplayStatus = (contractStatus) => {
     switch (contractStatus) {
@@ -122,7 +113,7 @@ const Investor = () => {
       }
     }
     checkUserRole();
-  }, [navigate, address]);
+  }, [contract, address, isConnected, navigate]);
 
 
 
