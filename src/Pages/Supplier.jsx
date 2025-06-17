@@ -10,6 +10,12 @@ const UnifiedSupplierDashboard = () => {
     id: '', buyer: '', amount: '', dueDate: ''
   });
   const [verifyId, setVerifyId] = useState('');
+  const [showTokenGeneration, setShowTokenGeneration] = useState(false);
+  const [approvedInvoiceId, setApprovedInvoiceId] = useState(null);
+  const [approvedInvoiceAmount, setApprovedInvoiceAmount] = useState(null);
+  const [waitingForVerification, setWaitingForVerification] = useState(false);
+  const [verificationStartTime, setVerificationStartTime] = useState(null);
+  const [tokenData, setTokenData] = useState({});
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [invoices, setInvoices] = useState([]);
@@ -80,6 +86,8 @@ const UnifiedSupplierDashboard = () => {
     }
   }, [contract, address, isConnected, navigate]);
 
+
+
   const loadSupplierInvoices = async () => {
     if (!contract || !address) return;
 
@@ -94,7 +102,6 @@ const UnifiedSupplierDashboard = () => {
       const invoicePromises = supplierInvoiceIds.map(async (invoiceId) => {
         try {
           const invoiceDetails = await contract.getInvoiceDetails(invoiceId);
-          console.log(`Invoice ${invoiceId} details:`, invoiceDetails);
 
           return {
             id: Number(invoiceDetails.id),
@@ -227,51 +234,178 @@ const UnifiedSupplierDashboard = () => {
   };
 
 
-  // Add this useEffect hook to set up the event listener
   useEffect(() => {
-    if (!contract) return;
+    if (!contract || !address) return;
 
-    let isSubscribed = true; // Prevent state updates after unmount
+    let isSubscribed = true;
+    let eventCleanup = null;
+    let pollInterval = null;
 
-    const handleInvoiceVerified = (invoiceId, isValid, event) => {
-      console.log('InvoiceVerified event received:', {
-        invoiceId: invoiceId.toString(),
-        isValid,
-        transactionHash: event.transactionHash
-      });
+    const setupEventListener = async () => {
+      try {
+        const handleInvoiceVerified = async (invoiceId, isValid, event) => {
+          console.log('InvoiceVerified event received:', {
+            invoiceId: invoiceId.toString(),
+            isValid,
+            transactionHash: event.transactionHash,
+            blockNumber: event.blockNumber
+          });
 
-      // Only update UI if component is still mounted
-      if (!isSubscribed) return;
+          if (!isSubscribed) return;
 
-      // Update UI based on verification result
-      if (isValid) {
-        alert(`Invoice #${invoiceId.toString()} has been approved!`);
-      } else {
-        alert(`Invoice #${invoiceId.toString()} has been rejected.`);
+          // Get invoice details to verify it belongs to current supplier
+          try {
+            const invoice = await contract.getInvoice(invoiceId);
+            if (invoice.supplier.toLowerCase() !== address.toLowerCase()) {
+              console.log('Event not for current supplier, ignoring');
+              return;
+            }
+          } catch (err) {
+            console.error('Error checking invoice ownership:', err);
+            return;
+          }
+
+          // Reset waiting state
+          setWaitingForVerification(false);
+          setVerificationStartTime(null);
+
+          if (isValid) {
+            try {
+              const isTokenGenerated = await contract.isTokenGenerated(invoiceId);
+              if (!isTokenGenerated) {
+                setShowTokenGeneration(true);
+              } else {
+                alert(`Invoice #${invoiceId.toString()} has been approved! (Tokens already generated)`);
+              }
+            } catch (error) {
+              console.error('Error checking token generation status:', error);
+              alert(`Invoice #${invoiceId.toString()} has been approved!`);
+            }
+          } else {
+            alert(`Invoice #${invoiceId.toString()} has been rejected.`);
+            setApprovedInvoiceId(null);
+            setApprovedInvoiceAmount(null);
+          }
+
+          // Refresh invoices
+          await loadSupplierInvoices();
+        };
+
+        // Set up event listener
+        contract.on('InvoiceVerified', handleInvoiceVerified);
+
+        eventCleanup = () => {
+          try {
+            contract.off('InvoiceVerified', handleInvoiceVerified);
+          } catch (error) {
+            console.error('Failed to remove event listener:', error);
+          }
+        };
+
+        console.log('Event listener set up successfully');
+
+      } catch (error) {
+        console.error('Failed to set up event listener:', error);
       }
-
-      // Refresh the supplier invoices list
-      loadSupplierInvoices();
     };
 
-    // Set up event listener with error handling
-    try {
-      contract.on('InvoiceVerified', handleInvoiceVerified);
-    } catch (error) {
-      console.error('Failed to set up event listener:', error);
-      setLoading(false);
+    // Set up polling as fallback
+    const startPolling = () => {
+      pollInterval = setInterval(async () => {
+        if (!isSubscribed || !waitingForVerification) return;
+
+        try {
+          // Check if any pending invoices have changed status
+          const supplierInvoices = await contract.getSupplierInvoices(address);
+
+          for (const invoiceId of supplierInvoices) {
+            const invoice = await contract.getInvoice(invoiceId);
+            const statusCode = Number(invoice.status);
+
+            // Find corresponding invoice in our state
+            const existingInvoice = invoices.find(inv => inv.id === Number(invoiceId));
+
+            if (existingInvoice && existingInvoice.statusCode !== statusCode) {
+              console.log(`Status change detected for invoice ${invoiceId}: ${existingInvoice.statusCode} -> ${statusCode}`);
+
+              if (statusCode === 2) { // Approved
+                setWaitingForVerification(false);
+                setVerificationStartTime(null);
+
+                const isTokenGenerated = await contract.isTokenGenerated(invoiceId);
+                if (!isTokenGenerated) {
+                  setApprovedInvoiceId(Number(invoiceId));
+                  setApprovedInvoiceAmount(Number(ethers.formatEther(invoice.amount)));
+                  setShowTokenGeneration(true);
+                }
+              } else if (statusCode === 3) { // Rejected
+                setWaitingForVerification(false);
+                setVerificationStartTime(null);
+                alert(`Invoice #${invoiceId} has been rejected.`);
+              }
+
+              await loadSupplierInvoices();
+              break;
+            }
+          }
+        } catch (error) {
+          console.error('Polling error:', error);
+        }
+      }, 5000); // Poll every 5 seconds when waiting for verification
+    };
+
+    setupEventListener();
+
+    // Start polling if waiting for verification
+    if (waitingForVerification) {
+      startPolling();
     }
 
-    // Cleanup function
     return () => {
       isSubscribed = false;
-      try {
-        contract.off('InvoiceVerified', handleInvoiceVerified);
-      } catch (error) {
-        console.error('Failed to remove event listener:', error);
+
+      if (eventCleanup) {
+        eventCleanup();
+      }
+
+      if (pollInterval) {
+        clearInterval(pollInterval);
       }
     };
-  }, [contract]);
+  }, [contract, address, waitingForVerification, invoices]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (waitingForVerification) {
+        e.preventDefault();
+        e.returnValue = 'Invoice verification is in progress. Are you sure you want to leave?';
+        return 'Invoice verification is in progress. Are you sure you want to leave?';
+      }
+    };
+
+    const handlePopState = (e) => {
+      if (waitingForVerification) {
+        const confirmLeave = window.confirm('Invoice verification is in progress. Are you sure you want to navigate away?');
+        if (!confirmLeave) {
+          // Push the current state back to prevent navigation
+          window.history.pushState(null, '', window.location.href);
+        }
+      }
+    };
+
+    if (waitingForVerification) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('popstate', handlePopState);
+
+      // Push a state to handle back button
+      window.history.pushState(null, '', window.location.href);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [waitingForVerification]);
 
   useEffect(() => {
     if (!contract) return;
@@ -287,7 +421,6 @@ const UnifiedSupplierDashboard = () => {
     return () => clearInterval(pollForUpdates);
   }, [contract]);
 
-  // Modified handleVerify function - remove the manual success alert
   const handleVerify = async () => {
     if (!contract || !isConnected) {
       alert('Please connect your wallet first');
@@ -305,8 +438,7 @@ const UnifiedSupplierDashboard = () => {
       alert('Please enter a valid invoice ID (positive number)');
       return;
     }
-    console.log('=== VERIFICATION DEBUG START ===');
-    console.log('Invoice ID to verify:', invoiceId);
+
 
     setLoading(true);
     try {
@@ -318,26 +450,27 @@ const UnifiedSupplierDashboard = () => {
 
       const invoice = await contract.getInvoice(invoiceId);
 
-      // Verify ownership
       if (invoice.supplier.toLowerCase() !== address.toLowerCase()) {
         alert('You can only verify your own invoices');
         return;
       }
 
-      // Check status
       if (Number(invoice.status) !== 0) {
         alert(`Invoice must be in Pending status to verify. Current status: ${invoice.status}`);
         return;
       }
 
-      // Check user role
       const userRole = await contract.getUserRole(address);
       if (Number(userRole) !== 0) {
         alert('Only suppliers can verify invoices');
         return;
       }
 
-      // Execute verification
+      setApprovedInvoiceId(invoiceId);
+      setApprovedInvoiceAmount(Number(ethers.formatEther(invoice.amount)));
+      console.log('Verifying invoice with ID:', invoiceId);
+      console.log('Invoice Amount:', Number(ethers.formatEther(invoice.amount)));
+
       const tx = await contract.verifyInvoice(invoiceId);
       console.log('Transaction sent:', tx.hash);
 
@@ -345,8 +478,9 @@ const UnifiedSupplierDashboard = () => {
       console.log('Transaction confirmed:', receipt);
 
       if (receipt.status === 1) {
-        // Don't show success alert here - event listener will handle it
         console.log('Verification transaction successful, waiting for event...');
+        setWaitingForVerification(true);
+        setVerificationStartTime(Date.now());
         setVerifyId('');
       } else {
         alert('Transaction failed. Check console for details.');
@@ -371,6 +505,95 @@ const UnifiedSupplierDashboard = () => {
       setLoading(false);
     }
   };
+
+
+  const handleTokenGeneration = async () => {
+    if (!contract || !isConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    const invoiceId = approvedInvoiceId;
+    const amount = approvedInvoiceAmount;
+
+    if (!invoiceId || !amount) {
+      alert('Invalid invoice data for token generation');
+      return;
+    }
+
+    // Check if tokens are already generated
+    const isTokenGenerated = await contract.isTokenGenerated(invoiceId);
+    if (isTokenGenerated) {
+      alert('Tokens have already been generated for this invoice');
+      setShowTokenGeneration(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const tx = await contract.tokenGeneration(invoiceId, amount);
+
+      const receipt = await tx.wait();
+
+      if (receipt.status === 1) {
+        alert(`Tokens successfully generated for invoice #${invoiceId}`);
+        setShowTokenGeneration(false);
+        setApprovedInvoiceId(null);
+        setApprovedInvoiceAmount(null);
+        await loadSupplierInvoices(); // Refresh invoices after token generation
+      }
+    } catch (err) {
+      console.error('Error generating tokens:', err);
+      if (err.message.includes('Main__InvoiceStatusMustBeApproved')) {
+        alert('Invoice must be Approved before generating tokens');
+      } else if (err.message.includes('Main__TokenAlreadyGenerated')) {
+        alert('Tokens have already been generated for this invoice');
+      } else if (err.message.includes('user rejected')) {
+        alert('Transaction was rejected by user');
+      } else {
+        alert(`Token generation failed: ${err.message || 'Unknown error'}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTokenData = async (invoiceId) => {
+    if (!contract) return;
+
+    try {
+      const [tokenAddress, totalSupply] = await Promise.all([
+        contract.getInvoiceTokenAddress(invoiceId),
+        contract.getTotalSupply(invoiceId)
+      ]);
+      console.log('Total Supply:', totalSupply.toString());
+      setTokenData(prev => ({
+        ...prev,
+        [invoiceId]: {
+          address: tokenAddress || '',
+          purchased: totalSupply || 0
+        }
+      }));
+    } catch (error) {
+      console.error(`Error fetching token data for invoice ${invoiceId}:`, error);
+      setTokenData(prev => ({
+        ...prev,
+        [invoiceId]: {
+          address: '',
+          purchased: 0
+        }
+      }));
+    }
+  };
+
+  // Update the modal to fetch data when selectedInvoice changes
+  useEffect(() => {
+    if (selectedInvoice && selectedInvoice.status === 'Approved') {
+      fetchTokenData(selectedInvoice.id);
+    }
+  }, [selectedInvoice, contract]);
+
+
 
   const getStatusColor = (status) => {
     const colors = {
@@ -638,10 +861,10 @@ const UnifiedSupplierDashboard = () => {
             </div>
           </div>
 
-          {/* Verify Invoice */}
+          {/* Verify Invoice and Token Generation*/}
           <div className="bg-gray-900/40 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-8 hover:border-gray-600/70 transition-all duration-300">
             <h3 className="text-2xl font-black mb-6 bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent">
-              Verify Invoice
+              Verify Invoice And Tokenize It
             </h3>
             <div className="space-y-4">
               <input
@@ -650,38 +873,107 @@ const UnifiedSupplierDashboard = () => {
                 value={verifyId}
                 onChange={(e) => setVerifyId(e.target.value)}
                 className="w-full bg-gray-800/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-300"
+                disabled={showTokenGeneration}
               />
 
               <button
                 onClick={handleVerify}
-                className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
+                disabled={showTokenGeneration || loading || waitingForVerification}
+                className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 <span className="relative z-10 flex items-center justify-center space-x-2">
                   <span>🔒</span>
-                  <span>Verify with ERP System</span>
+                  <span>{waitingForVerification ? 'Waiting for Verification...' : 'Verify with ERP System'}</span>
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
               </button>
 
-              <div className="mt-6 space-y-3">
-                <h4 className="text-lg font-bold text-gray-300">Recent Verifications</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                    <span className="font-medium">Invoice #12344</span>
-                    <span className="px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/40 rounded-full text-sm font-medium">
-                      ✅ Verified
-                    </span>
+              {/* Warning Message */}
+              {waitingForVerification && (
+                <div className="mt-4 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+                  <div className="flex items-start space-x-3">
+                    <span className="text-amber-400 text-lg">⚠️</span>
+                    <div>
+                      <h4 className="text-amber-200 font-semibold text-sm mb-1">
+                        Verification in Progress
+                      </h4>
+                      <p className="text-amber-300/80 text-xs leading-relaxed">
+                        Please don't reload or navigate away from this page. We're waiting for the ERP system to process your invoice verification.
+                      </p>
+                      <div className="mt-2 flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                        <span className="text-amber-400/60 text-xs">
+                          Listening for verification result...
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                    <span className="font-medium">Invoice #12343</span>
-                    <span className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/40 rounded-full text-sm font-medium">
-                      ⏳ In Progress...
-                    </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+
+          {showTokenGeneration && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 rounded-3xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in-95 duration-500">
+                {/* Subtle Background Pattern */}
+                <div className="absolute inset-0 w-full h-full overflow-hidden rounded-3xl">
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] opacity-20"></div>
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-60 w-60 rounded-full bg-gradient-to-r from-green-500/10 via-emerald-400/10 to-cyan-600/20 blur-3xl"></div>
+                </div>
+
+                <div className="relative z-10">
+                  {/* Success Icon */}
+                  <div className="flex justify-center mb-6">
+                    <div className="w-16 h-16 bg-gradient-to-r from-green-500/20 to-emerald-400/20 rounded-full flex items-center justify-center border border-green-500/30">
+                      <span className="text-3xl">✅</span>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <h2 className="text-2xl font-bold text-center mb-4 bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+                    Invoice Approved!
+                  </h2>
+
+                  {/* Message */}
+                  <p className="text-gray-300 text-center mb-2">
+                    Invoice #{approvedInvoiceId} has been successfully approved.
+                  </p>
+                  <p className="text-gray-400 text-center text-sm mb-8">
+                    You can now generate tokens for this invoice.
+                  </p>
+
+                  {/* Invoice Details */}
+                  <div className="bg-gray-800/50 rounded-lg p-4 mb-6 border border-gray-700/50">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-400">Invoice ID:</span>
+                      <span className="text-white font-mono">#{approvedInvoiceId}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm mt-2">
+                      <span className="text-gray-400">Amount:</span>
+                      <span className="text-white font-mono">{approvedInvoiceAmount?.toString()} tokens</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleTokenGeneration}
+                      disabled={loading}
+                      className="w-full relative bg-gradient-to-r from-green-500/20 via-emerald-400/20 to-cyan-600/30 text-white py-3 rounded-xl hover:from-green-500 hover:via-emerald-400 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-green-400/30 hover:border-green-300/60 group disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    >
+                      <span className="relative z-10 flex items-center justify-center space-x-2">
+                        <span>🪙</span>
+                        <span>{loading ? 'Generating Tokens...' : 'Generate Tokens'}</span>
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Filter Tabs */}
@@ -801,9 +1093,29 @@ const UnifiedSupplierDashboard = () => {
                   <span className="text-gray-400 text-sm font-medium">Amount</span>
                   <span className="text-white font-bold">${selectedInvoice.amount.toLocaleString()}</span>
                 </div>
+
+                {selectedInvoice.status === 'Approved' && (
+                  <>
+                    <div className="flex justify-between p-2 bg-white/5 rounded-lg">
+                      <span className="text-gray-400 text-sm font-medium">Token Address</span>
+                      <span className="text-white font-bold text-xs break-all">
+                        {tokenData[selectedInvoice.id]?.address || 'Loading...'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between p-2 bg-white/5 rounded-lg">
+                      <span className="text-gray-400 text-sm font-medium">Total Tokens Purchased</span>
+                      <span className="text-white font-bold text-sm">
+                        {tokenData[selectedInvoice.id]?.purchased}
+                      </span>
+                    </div>
+                  </>
+                )}
+
                 <div className="flex justify-between p-2 bg-white/5 rounded-lg">
                   <span className="text-gray-400 text-sm font-medium">Due Date</span>
-                  <span className="text-white font-bold text-sm">{new Date(selectedInvoice.dueDate).toLocaleDateString()}</span>
+                  <span className="text-white font-bold text-sm">
+                    {new Date(selectedInvoice.dueDate).toLocaleDateString()}
+                  </span>
                 </div>
                 <div className="flex justify-between p-2 bg-white/5 rounded-lg">
                   <span className="text-gray-400 text-sm font-medium">Status</span>
@@ -812,7 +1124,6 @@ const UnifiedSupplierDashboard = () => {
                   </span>
                 </div>
               </div>
-
 
               <button
                 onClick={() => setSelectedInvoice(null)}
