@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useWallet } from '../WalletContext';
-
 
 const BuyerMarketplace = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -10,25 +8,28 @@ const BuyerMarketplace = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [filterStatus, setFilterStatus] = useState('all');
   const [scrollY, setScrollY] = useState(0);
-  const navigate = useNavigate();
+  
+  // Web3 state
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [userRole, setUserRole] = useState(null);
 
-  // Invoice status enum mapping
+  const { address, contract, isConnected, connectWallet } = useWallet();
+
+  // Contract enums
   const INVOICE_STATUS = {
     0: 'Pending',
-    1: 'Approved',
-    2: 'Verified',
-    3: 'Funded',
-    4: 'Paid',
-    5: 'Overdue'
+    1: 'VerificationInProgress', 
+    2: 'Approved',
+    3: 'Rejected',
+    4: 'Paid'
   };
 
   const USER_ROLE = {
-    0: 'None',
-    1: 'Supplier',
-    2: 'Buyer',
-    3: 'Investor'
+    0: 'Supplier',
+    1: 'Buyer', 
+    2: 'Investor'
   };
-
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -46,79 +47,101 @@ const BuyerMarketplace = () => {
     };
   }, []);
 
-  const { account, address, isConnected, contract } = useWallet();
-
-  // Sample invoice data
-  const [invoices] = useState([
-    {
-      id: 12344,
-      supplier: 'TechCorp Ltd',
-      amount: 25000,
-      dueDate: '2025-07-15',
-      status: 'Approved',
-      penalty: 0,
-      totalDue: 25000,
-      description: 'Software Development Services Q2'
-    },
-    {
-      id: 12345,
-      supplier: 'Manufacturing Inc',
-      amount: 35000,
-      dueDate: '2025-06-20',
-      status: 'Overdue',
-      penalty: 1400,
-      totalDue: 36400,
-      description: 'Industrial Equipment Supply'
-    },
-    {
-      id: 12346,
-      supplier: 'Global Logistics',
-      amount: 18000,
-      dueDate: '2025-07-01',
-      status: 'Approved',
-      penalty: 0,
-      totalDue: 18000,
-      description: 'Shipping & Transportation Services'
-    },
-    {
-      id: 12347,
-      supplier: 'Design Studio Pro',
-      amount: 12500,
-      dueDate: '2025-06-25',
-      status: 'Overdue',
-      penalty: 500,
-      totalDue: 13000,
-      description: 'Brand Identity & Marketing Materials'
-    },
-    {
-      id: 12348,
-      supplier: 'Cloud Services Co',
-      amount: 8500,
-      dueDate: '2025-07-10',
-      status: 'Approved',
-      penalty: 0,
-      totalDue: 8500,
-      description: 'Monthly Infrastructure Costs'
-    },
-    {
-      id: 12349,
-      supplier: 'Legal Associates',
-      amount: 15000,
-      dueDate: '2025-06-15',
-      status: 'Overdue',
-      penalty: 750,
-      totalDue: 15750,
-      description: 'Corporate Legal Services'
+  useEffect(() => {
+    if (contract && address && isConnected) {
+      checkUserRole();
     }
-  ]);
+  }, [contract, address, isConnected]);
+
+  useEffect(() => {
+    if (contract && address && isConnected && userRole === 1) {
+      loadBuyerInvoices();
+    }
+  }, [contract, address, isConnected, userRole]);
+   
+  const checkUserRole = async () => {
+    if (!contract || !address) return;
+
+    try {
+      const role = await contract.getUserRole(address);
+      const roleNumber = Number(role);
+      setUserRole(roleNumber);
+      
+      // If user is not a buyer (role 1), prompt them to choose buyer role
+      if (roleNumber !== 1) {
+        const shouldChooseRole = window.confirm('You need to register as a Buyer to access this page. Would you like to register now?');
+        if (shouldChooseRole) {
+          await chooseRole(1); // 1 = Buyer
+        }
+      }
+    } catch (error) {
+      console.error('Error checking user role:', error);
+      // If the user hasn't chosen any role, prompt them
+      const shouldChooseRole = window.confirm('You need to register as a Buyer to access this page. Would you like to register now?');
+      if (shouldChooseRole) {
+        await chooseRole(1);
+      }
+    }
+  };
+
+  const chooseRole = async (role) => {
+    if (!contract) return;
+
+    try {
+      setLoading(true);
+      const tx = await contract.chooseRole(role);
+      await tx.wait();
+      setUserRole(role);
+      alert('Role selected successfully! You are now registered as a Buyer.');
+    } catch (error) {
+      console.error('Error choosing role:', error);
+      alert('Error choosing role: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadBuyerInvoices = async () => {
+    if (!contract || !address) return;
+
+    try {
+      setLoading(true);
+      const invoiceIds = await contract.getBuyerInvoiceIds(address);
+      
+      const invoicePromises = invoiceIds.map(async (id) => {
+        const details = await contract.getInvoiceDetails(id);
+        return {
+          id: Number(details[0]),
+          supplier: details[1],
+          buyer: details[2],
+          amount: Number(ethers.formatEther(details[3])),
+          investors: details[4],
+          status: INVOICE_STATUS[Number(details[5])] || 'Unknown',
+          dueDate: new Date(Number(details[6]) * 1000).toISOString().split('T')[0],
+          totalInvestment: Number(ethers.formatEther(details[7])),
+          isPaid: details[8],
+        };
+      });
+
+      const loadedInvoices = await Promise.all(invoicePromises);
+      setInvoices(loadedInvoices);
+    } catch (error) {
+      console.error('Error loading buyer invoices:', error);
+      alert('Error loading invoices: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+ 
 
   const filteredInvoices = useMemo(() => {
     if (filterStatus === 'all') return invoices;
-    return invoices.filter(invoice => invoice.status.toLowerCase() === filterStatus);
+    return invoices.filter(invoice => invoice.status.toLowerCase() === filterStatus.toLowerCase());
   }, [invoices, filterStatus]);
 
   const stats = useMemo(() => {
-    const overdue = invoices.filter(inv => inv.status === 'Overdue');
+    const overdue = invoices.filter(inv => inv.penalty > 0);
     const approved = invoices.filter(inv => inv.status === 'Approved');
     const totalPending = invoices.reduce((sum, inv) => sum + inv.totalDue, 0);
     const totalPenalties = invoices.reduce((sum, inv) => sum + inv.penalty, 0);
@@ -132,31 +155,52 @@ const BuyerMarketplace = () => {
   }, [invoices]);
 
   const handlePayInvoice = (invoice) => {
+    if (invoice.status !== 'Approved') {
+      alert('Invoice must be approved before payment');
+      return;
+    }
     setSelectedInvoice(invoice);
     setPaymentAmount(invoice.totalDue.toString());
   };
 
   const processPayment = async () => {
-    if (!selectedInvoice) return;
+    if (!selectedInvoice || !contract) return;
 
-    // Simulate payment processing
-    console.log(`Processing payment of ${paymentAmount} for Invoice #${selectedInvoice.id}`);
-
-    // Show success message and close modal
-    alert(`Payment of ${parseFloat(paymentAmount).toLocaleString()} processed successfully!`);
-    setSelectedInvoice(null);
-    setPaymentAmount('');
+    try {
+      setLoading(true);
+      const paymentAmountWei = ethers.parseEther(paymentAmount);
+      
+      const tx = await contract.buyerPayment(selectedInvoice.id, {
+        value: paymentAmountWei
+      });
+      
+      await tx.wait();
+      
+      alert(`Payment of ${paymentAmount} ETH processed successfully!`);
+      setSelectedInvoice(null);
+      setPaymentAmount('');
+      
+      // Reload invoices
+      await loadBuyerInvoices();
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      alert('Error processing payment: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusBadge = (status) => {
     const statusStyles = {
       'Approved': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
-      'Overdue': 'bg-red-500/20 text-red-400 border-red-500/40',
-      'Paid': 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+      'Paid': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+      'Pending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+      'VerificationInProgress': 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+      'Rejected': 'bg-red-500/20 text-red-400 border-red-500/40'
     };
 
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusStyles[status]}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusStyles[status] || 'bg-gray-500/20 text-gray-400 border-gray-500/40'}`}>
         {status}
       </span>
     );
@@ -170,9 +214,14 @@ const BuyerMarketplace = () => {
     return diffDays > 0 ? diffDays : 0;
   };
 
+  const formatAddress = (addr) => {
+    if (!addr) return '';
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden bg-black">
-      {/* New Background Pattern - matching Home.jsx */}
+      {/* Background Pattern */}
       <div className="absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
       <div className="absolute left-0 right-0 top-[-10%] h-[1000px] w-[1000px] rounded-full bg-[radial-gradient(circle_400px_at_50%_300px,#fbfbfb36,#000)] mx-auto"></div>
 
@@ -207,205 +256,285 @@ const BuyerMarketplace = () => {
               InvoiceFinance
             </div>
             <div className="hidden lg:block px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs text-purple-300 font-medium">
-              BUYER
+              {userRole !== null ? USER_ROLE[userRole] : 'BUYER'}
             </div>
           </div>
 
-
           {/* Action buttons */}
           <div className="flex items-center space-x-4">
-            <div className="text-gray-400 text-sm">
-              <span className="text-gray-300 font-medium">{account}</span>
-            </div>
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            {!isConnected ? (
+              <button
+                onClick={connectWallet}
+                className="bg-gradient-to-r from-purple-600 to-cyan-600 text-white px-6 py-2 rounded-xl hover:from-purple-500 hover:to-cyan-500 transition-all duration-300 font-bold"
+              >
+                Connect Wallet
+              </button>
+            ) : (
+              <>
+                <div className="text-gray-400 text-sm">
+                  <span className="text-gray-300 font-medium">
+                    {formatAddress(address)}
+                  </span>
+                </div>
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              </>
+            )}
           </div>
         </nav>
       </header>
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-8 py-12">
-
-        {/* Page Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4zl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
-            Settlement Dashboard
-          </h1>
-          <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
-            Manage and pay your outstanding invoices with automated smart contract execution
-          </p>
-        </div>
-
-        {/* Stats Cards - Demo Cards Style */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          {[
-            {
-              value: stats.overdueCount,
-              label: "Overdue",
-              change: "Requires attention",
-              icon: "⚠️",
-              gradient: "from-red-200/1 to-orange-700/20",
-              border: "border-red-500/40",
-              hoverBorder: "hover:border-red-400/70",
-              accent: "red"
-            },
-            {
-              value: stats.approvedCount,
-              label: "Approved",
-              change: "Ready to pay",
-              icon: "✅",
-              gradient: "from-emerald-200/1 to-green-700/20",
-              border: "border-emerald-500/40",
-              hoverBorder: "hover:border-emerald-400/70",
-              accent: "emerald"
-            },
-            {
-              value: `$${stats.totalPending.toLocaleString()}`,
-              label: "Total Due",
-              change: "Outstanding amount",
-              icon: "💰",
-              gradient: "from-cyan-200/1 to-blue-700/15",
-              border: "border-cyan-500/40",
-              hoverBorder: "hover:border-cyan-400/70",
-              accent: "cyan"
-            },
-            {
-              value: `$${stats.totalPenalties.toLocaleString()}`,
-              label: "Penalties",
-              change: "Late fees",
-              icon: "📈",
-              gradient: "from-orange-200/1 to-orange-700/20",
-              border: "border-orange-500/40",
-              hoverBorder: "hover:border-orange-400/70",
-              accent: "orange"
-            }
-          ].map((stat, index) => (
-            <div
-              key={index}
-              className={`relative bg-gradient-to-br ${stat.gradient} backdrop-blur-2xl border ${stat.border} ${stat.hoverBorder} rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden`}
-            >
-              <div className="absolute inset-0 opacity-5">
-                <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
-              </div>
-
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-300 text-sm font-medium">{stat.label}</span>
-                  <span className="text-2xl group-hover:scale-110 transition-transform duration-300">{stat.icon}</span>
-                </div>
-                <div className="text-2xl font-black text-white mb-2 group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:to-cyan-400 group-hover:bg-clip-text group-hover:text-transparent transition-all duration-300">
-                  {stat.value}
-                </div>
-                <div className={`text-${stat.accent}-400 text-xs font-semibold`}>
-                  {stat.change}
-                </div>
-              </div>
+        {!isConnected ? (
+          <div className="text-center py-20">
+            <div className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
+              Connect Your Wallet
             </div>
-          ))}
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="flex space-x-4 mb-8 justify-center">
-          {[
-            { key: 'all', label: 'All Invoices', count: invoices.length },
-            { key: 'overdue', label: 'Overdue', count: stats.overdueCount },
-            { key: 'approved', label: 'Approved', count: stats.approvedCount }
-          ].map((filter) => (
+            <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">
+              Please connect your MetaMask wallet to access the buyer marketplace
+            </p>
             <button
-              key={filter.key}
-              onClick={() => setFilterStatus(filter.key)}
-              className={`px-8 py-3 rounded-xl font-bold transition-all duration-300 ${filterStatus === filter.key
-                ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
-                : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl cursor-pointer'
-                }`}
+              onClick={connectWallet}
+              className="bg-gradient-to-r from-purple-600 to-cyan-600 text-white px-8 py-4 rounded-xl hover:from-purple-500 hover:to-cyan-500 transition-all duration-300 font-bold text-lg"
             >
-              {filter.label} ({filter.count})
+              Connect Wallet
             </button>
-          ))}
-        </div>
-
-        {/* Invoice Grid - Horizontal Demo Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredInvoices.map((invoice) => (
-            <div
-              key={invoice.id}
-              className={`relative backdrop-blur-2xl border rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden ${invoice.status === 'Overdue'
-                ? 'bg-gradient-to-br from-red-100/1 to-orange-700/15 border-red-500/40 hover:border-red-400/70 hover:shadow-xl hover:shadow-red-500/30'
-                : 'bg-gradient-to-br from-gray-800/40 to-gray-700/40 border-gray-700/50 hover:border-gray-600/70 hover:shadow-xl hover:shadow-purple-500/20'
-                }`}
+          </div>
+        ) : userRole !== 1 ? (
+          <div className="text-center py-20">
+            <div className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
+              Register as Buyer
+            </div>
+            <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">
+              You need to register as a Buyer to access this marketplace
+            </p>
+            <button
+              onClick={() => chooseRole(1)}
+              disabled={loading}
+              className="bg-gradient-to-r from-purple-600 to-cyan-600 text-white px-8 py-4 rounded-xl hover:from-purple-500 hover:to-cyan-500 transition-all duration-300 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="absolute inset-0 opacity-5">
-                <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
+              {loading ? 'Registering...' : 'Register as Buyer'}
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Page Header */}
+            <div className="text-center mb-12">
+              <h1 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
+                Settlement Dashboard
+              </h1>
+              <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
+                Manage and pay your outstanding invoices with automated smart contract execution
+              </p>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-20">
+                <div className="text-white text-xl mb-4">Loading...</div>
+                <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
               </div>
+            ) : (
+              <>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+                  {[
+                    {
+                      value: stats.overdueCount,
+                      label: "Overdue",
+                      change: "Requires attention",
+                      icon: "⚠️",
+                      gradient: "from-red-200/1 to-orange-700/20",
+                      border: "border-red-500/40",
+                      hoverBorder: "hover:border-red-400/70",
+                      accent: "red"
+                    },
+                    {
+                      value: stats.approvedCount,
+                      label: "Approved",
+                      change: "Ready to pay",
+                      icon: "✅",
+                      gradient: "from-emerald-200/1 to-green-700/20",
+                      border: "border-emerald-500/40",
+                      hoverBorder: "hover:border-emerald-400/70",
+                      accent: "emerald"
+                    },
+                    {
+                      value: `${stats.totalPending.toFixed(2)} ETH`,
+                      label: "Total Due",
+                      change: "Outstanding amount",
+                      icon: "💰",
+                      gradient: "from-cyan-200/1 to-blue-700/15",
+                      border: "border-cyan-500/40",
+                      hoverBorder: "hover:border-cyan-400/70",
+                      accent: "cyan"
+                    },
+                    {
+                      value: `${stats.totalPenalties.toFixed(4)} ETH`,
+                      label: "Penalties",
+                      change: "Late fees",
+                      icon: "📈",
+                      gradient: "from-orange-200/1 to-orange-700/20",
+                      border: "border-orange-500/40",
+                      hoverBorder: "hover:border-orange-400/70",
+                      accent: "orange"
+                    }
+                  ].map((stat, index) => (
+                    <div
+                      key={index}
+                      className={`relative bg-gradient-to-br ${stat.gradient} backdrop-blur-2xl border ${stat.border} ${stat.hoverBorder} rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden`}
+                    >
+                      <div className="absolute inset-0 opacity-5">
+                        <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
+                      </div>
 
-              <div className="relative z-10">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-lg font-black text-white">#{invoice.id}</div>
-                  {getStatusBadge(invoice.status)}
-                </div>
-
-                {/* Supplier */}
-                <div className="mb-4">
-                  <div className="text-gray-400 text-xs font-medium mb-1">SUPPLIER</div>
-                  <div className="text-white font-bold text-sm truncate">{invoice.supplier}</div>
-                </div>
-
-                {/* Amount Display */}
-                <div className="bg-white/5 rounded-xl p-4 mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400 text-xs font-medium">AMOUNT</span>
-                    <span className="text-white font-bold">${invoice.amount.toLocaleString()}</span>
-                  </div>
-                  {invoice.penalty > 0 && (
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-red-400 text-xs font-medium">PENALTY</span>
-                      <span className="text-red-400 font-bold">+${invoice.penalty.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="border-t border-gray-600/50 pt-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-cyan-400 text-sm font-bold">TOTAL DUE</span>
-                      <span className="text-cyan-400 font-black text-lg">${invoice.totalDue.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Due Date & Status */}
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <div className="text-gray-400 text-xs font-medium">DUE DATE</div>
-                    <div className="text-white text-sm font-bold">{new Date(invoice.dueDate).toLocaleDateString()}</div>
-                  </div>
-                  {invoice.status === 'Overdue' && (
-                    <div className="text-right">
-                      <div className="text-red-400 text-xs font-bold bg-red-500/20 px-2 py-1 rounded-full">
-                        {getDaysOverdue(invoice.dueDate)} days late
+                      <div className="relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-gray-300 text-sm font-medium">{stat.label}</span>
+                          <span className="text-2xl group-hover:scale-110 transition-transform duration-300">{stat.icon}</span>
+                        </div>
+                        <div className="text-2xl font-black text-white mb-2 group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:to-cyan-400 group-hover:bg-clip-text group-hover:text-transparent transition-all duration-300">
+                          {stat.value}
+                        </div>
+                        <div className={`text-${stat.accent}-400 text-xs font-semibold`}>
+                          {stat.change}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  ))}
                 </div>
 
-                {/* Description */}
-                <div className="mb-6">
-                  <div className="text-gray-400 text-xs font-medium mb-1">DESCRIPTION</div>
-                  <div className="text-gray-300 text-sm leading-relaxed line-clamp-2">{invoice.description}</div>
+                {/* Filter Tabs */}
+                <div className="flex space-x-4 mb-8 justify-center">
+                  {[
+                    { key: 'all', label: 'All Invoices', count: invoices.length },
+                    { key: 'approved', label: 'Approved', count: stats.approvedCount },
+                    { key: 'paid', label: 'Paid', count: invoices.filter(inv => inv.status === 'Paid').length }
+                  ].map((filter) => (
+                    <button
+                      key={filter.key}
+                      onClick={() => setFilterStatus(filter.key)}
+                      className={`px-8 py-3 rounded-xl font-bold transition-all duration-300 ${filterStatus === filter.key
+                        ? 'bg-gradient-to-r from-purple-600/60 to-cyan-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30'
+                        : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl'
+                        }`}
+                    >
+                      {filter.label} ({filter.count})
+                    </button>
+                  ))}
                 </div>
 
-                {/* Action Button */}
-                <button
-                  onClick={() => handlePayInvoice(invoice)}
-                  className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
-                >
-                  <span className="relative z-10 flex items-center justify-center space-x-2">
-                    <span>💳</span>
-                    <span>Pay ${invoice.totalDue.toLocaleString()}</span>
-                  </span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                {/* Invoice Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {filteredInvoices.map((invoice) => (
+                    <div
+                      key={invoice.id}
+                      className={`relative backdrop-blur-2xl border rounded-2xl p-6 hover:transform hover:scale-105 transition-all duration-500 cursor-pointer group overflow-hidden ${invoice.penalty > 0
+                        ? 'bg-gradient-to-br from-red-100/1 to-orange-700/15 border-red-500/40 hover:border-red-400/70 hover:shadow-xl hover:shadow-red-500/30'
+                        : 'bg-gradient-to-br from-gray-800/40 to-gray-700/40 border-gray-700/50 hover:border-gray-600/70 hover:shadow-xl hover:shadow-purple-500/20'
+                        }`}
+                    >
+                      <div className="absolute inset-0 opacity-5">
+                        <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
+                      </div>
+
+                      <div className="relative z-10">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="text-lg font-black text-white">#{invoice.id}</div>
+                          {getStatusBadge(invoice.status)}
+                        </div>
+
+                        {/* Supplier */}
+                        <div className="mb-4">
+                          <div className="text-gray-400 text-xs font-medium mb-1">SUPPLIER</div>
+                          <div className="text-white font-bold text-sm truncate">
+                            {formatAddress(invoice.supplier)}
+                          </div>
+                        </div>
+
+                        {/* Amount Display */}
+                        <div className="bg-white/5 rounded-xl p-4 mb-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-gray-400 text-xs font-medium">AMOUNT</span>
+                            <span className="text-white font-bold">{invoice.amount.toFixed(4)} ETH</span>
+                          </div>
+                          {invoice.penalty > 0 && (
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-red-400 text-xs font-medium">PENALTY</span>
+                              <span className="text-red-400 font-bold">+{invoice.penalty.toFixed(4)} ETH</span>
+                            </div>
+                          )}
+                          <div className="border-t border-gray-600/50 pt-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-cyan-400 text-sm font-bold">TOTAL DUE</span>
+                              <span className="text-cyan-400 font-black text-lg">{invoice.totalDue.toFixed(4)} ETH</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Due Date & Status */}
+                        <div className="flex justify-between items-center mb-4">
+                          <div>
+                            <div className="text-gray-400 text-xs font-medium">DUE DATE</div>
+                            <div className="text-white text-sm font-bold">{new Date(invoice.dueDate).toLocaleDateString()}</div>
+                          </div>
+                          {invoice.penalty > 0 && (
+                            <div className="text-right">
+                              <div className="text-red-400 text-xs font-bold bg-red-500/20 px-2 py-1 rounded-full">
+                                {getDaysOverdue(invoice.dueDate)} days late
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Description */}
+                        <div className="mb-6">
+                          <div className="text-gray-400 text-xs font-medium mb-1">DESCRIPTION</div>
+                          <div className="text-gray-300 text-sm leading-relaxed line-clamp-2">{invoice.description}</div>
+                        </div>
+
+                        {/* Action Button */}
+                        <button
+                          onClick={() => handlePayInvoice(invoice)}
+                          disabled={invoice.status === 'Paid' || invoice.status !== 'Approved'}
+                          className={`w-full relative py-3 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg font-bold text-sm overflow-hidden cursor-pointer border group ${
+                            invoice.status === 'Paid' 
+                              ? 'bg-gray-600/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
+                              : invoice.status === 'Approved'
+                              ? 'bg-gradient-to-r from-purple-600/50 via-purple-700/50 to-cyan-600/50 text-white hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 border-purple-400/30 hover:border-purple-300/60'
+                              : 'bg-gray-700/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
+                          }`}
+                        >
+                          <span className="relative z-10 flex items-center justify-center space-x-2">
+                            <span>{invoice.status === 'Paid' ? '✅' : '💳'}</span>
+                            <span>
+                              {invoice.status === 'Paid' 
+                                ? 'Paid' 
+                                : invoice.status === 'Approved'
+                                ? `Pay ${invoice.totalDue.toFixed(4)} ETH`
+                                : `${invoice.status}`
+                              }
+                            </span>
+                          </span>
+                          {invoice.status === 'Approved' && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {invoices.length === 0 && (
+                  <div className="text-center py-20">
+                    <div className="text-gray-400 text-xl mb-4">No invoices found</div>
+                    <div className="text-gray-500">You don't have any invoices yet.</div>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
       </main>
 
       {/* Payment Modal */}
@@ -429,21 +558,21 @@ const BuyerMarketplace = () => {
               </div>
               <div className="flex justify-between p-3 bg-white/5 rounded-lg">
                 <span className="text-gray-400 font-medium">Supplier</span>
-                <span className="text-white font-bold">{selectedInvoice.supplier}</span>
+                <span className="text-white font-bold text-sm">{formatAddress(selectedInvoice.supplier)}</span>
               </div>
               <div className="flex justify-between p-3 bg-white/5 rounded-lg">
                 <span className="text-gray-400 font-medium">Original Amount</span>
-                <span className="text-white font-bold">${selectedInvoice.amount.toLocaleString()}</span>
+                <span className="text-white font-bold">{selectedInvoice.amount.toFixed(4)} ETH</span>
               </div>
               {selectedInvoice.penalty > 0 && (
                 <div className="flex justify-between p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
                   <span className="text-red-400 font-medium">Penalty</span>
-                  <span className="text-red-400 font-bold">${selectedInvoice.penalty.toLocaleString()}</span>
+                  <span className="text-red-400 font-bold">{selectedInvoice.penalty.toFixed(4)} ETH</span>
                 </div>
               )}
               <div className="flex justify-between text-xl font-black border-t pt-4 p-3 bg-cyan-500/10 border-cyan-500/30 rounded-lg">
                 <span className="text-white">Total Due</span>
-                <span className="text-cyan-400">${selectedInvoice.totalDue.toLocaleString()}</span>
+                <span className="text-cyan-400">{selectedInvoice.totalDue.toFixed(4)} ETH</span>
               </div>
             </div>
 
