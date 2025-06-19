@@ -335,7 +335,7 @@ const UnifiedSupplierDashboard = () => {
                 const isTokenGenerated = await contract.isTokenGenerated(invoiceId);
                 if (!isTokenGenerated) {
                   setApprovedInvoiceId(Number(invoiceId));
-                  setApprovedInvoiceAmount(Number(ethers.formatEther(invoice.amount)));
+                  setApprovedInvoiceAmount(invoice.amount);
                   setShowTokenGeneration(true);
                 }
               } else if (statusCode === 3) { // Rejected
@@ -467,9 +467,9 @@ const UnifiedSupplierDashboard = () => {
       }
 
       setApprovedInvoiceId(invoiceId);
-      setApprovedInvoiceAmount(Number(ethers.formatEther(invoice.amount)));
+      setApprovedInvoiceAmount(invoice.amount);
       console.log('Verifying invoice with ID:', invoiceId);
-      console.log('Invoice Amount:', Number(ethers.formatEther(invoice.amount)));
+      console.log('Invoice Amount:', invoice.amount);
 
       const tx = await contract.verifyInvoice(invoiceId);
       console.log('Transaction sent:', tx.hash);
@@ -514,9 +514,8 @@ const UnifiedSupplierDashboard = () => {
     }
 
     const invoiceId = approvedInvoiceId;
-    const amount = approvedInvoiceAmount;
 
-    if (!invoiceId || !amount) {
+    if (!invoiceId || !approvedInvoiceId) {
       alert('Invalid invoice data for token generation');
       return;
     }
@@ -531,7 +530,9 @@ const UnifiedSupplierDashboard = () => {
 
     setLoading(true);
     try {
-      const tx = await contract.tokenGeneration(invoiceId, amount);
+      console.log('Generating tokens for invoice ID:', invoiceId);
+      console.log('Approved Invoice Amount:', approvedInvoiceAmount);
+      const tx = await contract.tokenGeneration(invoiceId, approvedInvoiceAmount);
 
       const receipt = await tx.wait();
 
@@ -571,7 +572,7 @@ const UnifiedSupplierDashboard = () => {
         ...prev,
         [invoiceId]: {
           address: tokenAddress || '',
-          purchased: totalSupply || 0
+          purchased: totalSupply ? Number(ethers.formatEther(totalSupply)) : 0
         }
       }));
     } catch (error) {
@@ -952,7 +953,7 @@ const UnifiedSupplierDashboard = () => {
                     </div>
                     <div className="flex justify-between items-center text-sm mt-2">
                       <span className="text-gray-400">Amount:</span>
-                      <span className="text-white font-mono">{approvedInvoiceAmount?.toString()} tokens</span>
+                      <span className="text-white font-mono">{Number(ethers.formatEther(approvedInvoiceAmount))} tokens</span>
                     </div>
                   </div>
 
