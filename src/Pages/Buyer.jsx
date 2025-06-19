@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ethers } from 'ethers';
 import { useWallet } from '../WalletContext';
 
+
 const Buyer = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -123,40 +124,46 @@ const Buyer = () => {
       }
 
       // Fetch details for each invoice
-      const invoicePromises = invoiceIds.map(async (id) => {
-        try {
-          const details = await contract.getInvoiceDetails(id);
-          const dueDate = new Date(Number(details[6]) * 1000);
-          const today = new Date();
-          const isOverdue = dueDate < today && Number(details[5]) !== 4; // Not paid and overdue
-          const daysOverdue = isOverdue ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24)) : 0;
-          
-          // Calculate penalty (assuming 1% per day overdue, max 10%)
-          const penalty = isOverdue ? Math.min(Number(ethers.formatEther(details[3])) * 0.01 * daysOverdue, Number(ethers.formatEther(details[3])) * 0.1) : 0;
-          const totalDue = Number(ethers.formatEther(details[3])) + penalty;
-
-          return {
-            id: Number(details[0]),
-            supplier: details[1],
-            buyer: details[2],
-            amount: Number(ethers.formatEther(details[3])),
-            investors: details[4],
-            status: INVOICE_STATUS[Number(details[5])] || 'Unknown',
-            statusCode: Number(details[5]),
-            dueDate: dueDate.toISOString().split('T')[0],
-            totalInvestment: Number(ethers.formatEther(details[7])),
-            isPaid: details[8],
-            isOverdue,
-            daysOverdue,
-            penalty,
-            totalDue,
-            description: `Invoice #${Number(details[0])} from ${formatAddress(details[1])}`
-          };
-        } catch (err) {
-          console.error(`Error loading invoice ${id}:`, err);
-          return null;
-        }
-      });
+      // Fetch details for each invoice
+const invoicePromises = invoiceIds.map(async (id) => {
+  try {
+    const details = await contract.getInvoiceDetails(id);
+    
+    // Correct mapping based on Solidity function signature:
+    // [0] id, [1] supplier, [2] buyer, [3] amount, [4] investors, 
+    // [5] status, [6] dueDate, [7] totalInvestment, [8] isPaid
+    
+    const dueDate = new Date(Number(details[6]) * 1000);
+    const today = new Date();
+    const isOverdue = dueDate < today && Number(details[5]) !== 4; // Not paid and overdue
+    const daysOverdue = isOverdue ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24)) : 0;
+    
+    // Calculate penalty (assuming 1% per day overdue, max 10%)
+    const baseAmount = Number(ethers.formatEther(details[3]));
+    const penalty = isOverdue ? Math.min(baseAmount * 0.01 * daysOverdue, baseAmount * 0.1) : 0;
+    const totalDue = baseAmount + penalty;
+    
+    return {
+      id: Number(details[0]),           
+      supplier: details[1],             
+      buyer: details[2],                
+      amount: baseAmount,               
+      investors: details[4],            
+      status: INVOICE_STATUS[Number(details[5])] || 'Unknown',  
+      statusCode: Number(details[5]),   
+      dueDate: dueDate.toISOString().split('T')[0], 
+      totalInvestment: Number(ethers.formatEther(details[7])), 
+      isOverdue,
+      daysOverdue,
+      penalty,
+      totalDue,
+      description: `Invoice #${Number(details[0])} from ${formatAddress(details[1])}`
+    };
+  } catch (err) {
+    console.error(`Error loading invoice ${id}:`, err);
+    return null;
+  }
+});
 
       const loadedInvoices = (await Promise.all(invoicePromises)).filter(Boolean);
       setInvoices(loadedInvoices);
@@ -198,60 +205,126 @@ const Buyer = () => {
   }, [invoices]);
 
   const handlePayInvoice = (invoice) => {
-    if (invoice.statusCode !== 2) { // Not approved
-      alert('Invoice must be approved before payment');
+  // Validate invoice status
+  if (invoice.statusCode !== 2) { // Not approved
+    alert('❌ Invoice must be approved before payment');
+    return;
+  }
+  
+  // Check if already paid
+  if (invoice.isPaid || invoice.statusCode === 4) {
+    alert('❌ Invoice has already been paid');
+    return;
+  }
+
+  setSelectedInvoice(invoice);
+  setPaymentAmount(invoice.amount.toString());
+};
+const processPayment = async () => {
+  if (!selectedInvoice || !contract) return;
+  
+  try {
+    setLoading(true);
+    
+    // Get the invoice details
+    const invoice = await contract.getInvoice(selectedInvoice.id);
+    const invoiceAmount = invoice.amount; 
+    
+   
+    const ethPerDollar = await contract.getPriceOfTokenInEth(selectedInvoice.id);
+    
+    const totalPaymentInWei = (invoiceAmount * ethPerDollar) / ethers.parseEther("1");
+    
+    console.log('Payment calculation:', {
+      invoiceId: selectedInvoice.id,
+      invoiceAmountUSD: ethers.formatEther(invoiceAmount),
+      ethPerDollar: ethers.formatEther(ethPerDollar),
+      totalPaymentETH: ethers.formatEther(totalPaymentInWei),
+      invoiceAmountRaw: invoiceAmount.toString(),
+      ethPerDollarRaw: ethPerDollar.toString(),
+      totalPaymentRaw: totalPaymentInWei.toString()
+    });
+    
+    // ✅ Add validation to prevent sending 0 or negative amounts
+    if (totalPaymentInWei <= 0n) {
+      alert('❌ Error: Invalid payment amount calculated. Please check the price feed.');
       return;
     }
-    setSelectedInvoice(invoice);
-    setPaymentAmount(invoice.totalDue.toString());
-  };
+    
+    // Confirm payment with user
+    const confirmMessage = `
+Invoice Amount: ${ethers.formatEther(invoiceAmount)} USD
+Payment in ETH: ${ethers.formatEther(totalPaymentInWei)} ETH
 
-  const processPayment = async () => {
-    if (!selectedInvoice || !contract) return;
-
-    try {
-      setLoading(true);
-      const paymentAmountWei = ethers.parseEther(paymentAmount);
-      
-      console.log('Processing payment:', {
-        invoiceId: selectedInvoice.id,
-        amount: paymentAmount,
-        amountWei: paymentAmountWei.toString()
-      });
-      
-      const tx = await contract.buyerPayment(selectedInvoice.id, {
-        value: paymentAmountWei
-      });
-      
-      console.log('Payment transaction sent:', tx.hash);
-      const receipt = await tx.wait();
-      console.log('Payment transaction confirmed:', receipt);
-      
-      if (receipt.status === 1) {
-        alert(`Payment of ${paymentAmount} ETH processed successfully!`);
-        setSelectedInvoice(null);
-        setPaymentAmount('');
-        
-        // Reload invoices
-        await loadBuyerInvoices();
-      } else {
-        alert('Payment failed. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error processing payment:', error);
-      if (error.message.includes('Main__InvoiceStatusMustBeApproved')) {
-        alert('Invoice must be approved before payment');
-      } else if (error.message.includes('Main__InsufficientPayment')) {
-        alert('Insufficient payment amount');
-      } else if (error.message.includes('user rejected')) {
-        alert('Transaction was rejected by user');
-      } else {
-        alert('Error processing payment: ' + (error.reason || error.message));
-      }
-    } finally {
-      setLoading(false);
+Proceed with payment?
+    `;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
     }
-  };
+    
+    // ✅ Add balance check before sending transaction
+    const signer = await contract.runner;
+    const balance = await signer.provider.getBalance(signer.address);
+    
+    if (balance < totalPaymentInWei) {
+      alert(`❌ Insufficient balance. Required: ${ethers.formatEther(totalPaymentInWei)} ETH, Available: ${ethers.formatEther(balance)} ETH`);
+      return;
+    }
+    
+    // Execute payment
+    const tx = await contract.buyerPayment(selectedInvoice.id, {
+      value: totalPaymentInWei,
+      gasLimit: 500000 // Set reasonable gas limit
+    });
+    
+    console.log('Payment transaction sent:', tx.hash);
+    
+    // Show transaction pending
+    alert(`Payment transaction submitted! Hash: ${tx.hash}\nWaiting for confirmation...`);
+    
+    const receipt = await tx.wait();
+    console.log('Payment transaction confirmed:', receipt);
+    
+    if (receipt.status === 1) {
+      alert(`✅ Payment successful!\nAmount: ${ethers.formatEther(totalPaymentInWei)} ETH\nTransaction: ${tx.hash}`);
+      setSelectedInvoice(null);
+      setPaymentAmount('');
+      
+      // Reload invoices to reflect updated status
+      await loadBuyerInvoices();
+    } else {
+      alert('❌ Payment transaction failed. Please try again.');
+    }
+    
+  } catch (error) {
+    console.error('Error processing payment:', error);
+    
+    // Handle specific contract errors
+    if (error.message.includes('Main__InvoiceMustBeApproved')) {
+      alert('❌ Error: Invoice must be approved before payment');
+    } else if (error.message.includes('Main__InsufficientPayment')) {
+      alert('❌ Error: Insufficient payment amount. Please check the required amount.');
+    } else if (error.message.includes('Main__InvoiceAlreadyPaid')) {
+      alert('❌ Error: Invoice has already been paid');
+    } else if (error.message.includes('Main__MustBeBuyerOfTheInvoice')) {
+      alert('❌ Error: You are not the buyer of this invoice');
+    } else if (error.message.includes('Main__CallerMustBeBuyer')) {
+      alert('❌ Error: You must be registered as a buyer');
+    } else if (error.message.includes('Main__InvoiceNotExist')) {
+      alert('❌ Error: Invoice does not exist');
+    } else if (error.message.includes('user rejected')) {
+      // User cancelled transaction
+      console.log('User cancelled transaction');
+    } else if (error.message.includes('insufficient funds')) {
+      alert('❌ Error: Insufficient ETH balance in your wallet');
+    } else {
+      alert('❌ Error processing payment: ' + (error.reason || error.message));
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getStatusBadge = (status) => {
     const statusStyles = {
@@ -513,8 +586,8 @@ const Buyer = () => {
                   key={filter.key}
                   onClick={() => setFilterStatus(filter.key)}
                   className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 cursor-pointer ${filterStatus === filter.key
-                    ? 'bg-gradient-to-r from-purple-600/60 to-cyan-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30'
-                    : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl'
+                    ? 'bg-gradient-to-r from-black-600/60 to-grey-600/60 text-white border border-purple-400/50 shadow-lg shadow-purple-500/30 cursor-pointer'
+                : 'bg-gray-800/40 text-gray-400 border border-gray-700/50 hover:bg-gray-700/40 hover:text-gray-300 backdrop-blur-xl cursor-pointer'
                     }`}
                 >
                   {filter.label} ({filter.count})
@@ -600,7 +673,7 @@ const Buyer = () => {
                     <button
                       onClick={() => handlePayInvoice(invoice)}
                       disabled={invoice.status === 'Paid' || invoice.status !== 'Approved'}
-                      className={`w-full relative py-3 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg font-bold text-sm overflow-hidden cursor-pointer border group ${
+                      className={`w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group ${
                         invoice.status === 'Paid' 
                           ? 'bg-gray-600/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
                           : invoice.status === 'Approved'
