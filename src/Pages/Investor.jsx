@@ -11,9 +11,10 @@ const Investor = () => {
   const [scrollY, setScrollY] = useState(0);
   const [showPayments, setShowPayments] = useState(false);
   const [availableInvoices, setAvailableInvoices] = useState([]);
-  const [priceOfOneTokenInEth, setPriceOfOneTokenInEth] = useState(0);
+  // const [priceOfOneTokenInEth, setPriceOfOneTokenInEth] = useState(0);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [tokenData, setTokenData] = useState({});
   const navigate = useNavigate();
 
   const { address, contract, isConnected, provider } = useWallet();
@@ -64,18 +65,19 @@ const Investor = () => {
             id: Number(invoiceData.id),
             supplier: formatAddress(invoiceData.supplier),
             buyer: formatAddress(invoiceData.buyer),
-            amount: parseFloat(ethers.formatEther(invoiceData.amount)),
+            amount: invoiceData.amount,
             dueDate: new Date(Number(invoiceData.dueDate) * 1000).toISOString().split('T')[0],
             status: getDisplayStatus(Number(invoiceData.status)),
-            fundedAmount: parseFloat(ethers.formatEther(invoiceData.totalInvestment)),
+            fundedAmount: invoiceData.totalInvestment,
             daysToPayment: Math.ceil((Number(invoiceData.dueDate) * 1000 - Date.now()) / (1000 * 60 * 60 * 24)),
             description: `Invoice #${invoiceData.id} for $${parseFloat(ethers.formatEther(invoiceData.amount)).toFixed(2)} from ${formatAddress(invoiceData.supplier)} to ${formatAddress(invoiceData.buyer)}`,
             tokenAddress: await contract.getInvoiceTokenAddress(id),
+            maxSupply: await contract.getMaxSupply(id),
             isPaid: invoiceData.isPaid
           }
         } catch (error) {
           console.error(`Error fetching invoice at id ${id}:`, error);
-          return null; // Return null for this invoice if there's an error
+          return null;
         }
       });
 
@@ -120,10 +122,16 @@ const Investor = () => {
   const setupEventListeners = () => {
     if (!contract) return;
 
+    contract.removeAllListeners('SuccessfulTokenPurchase');
+    contract.removeAllListeners('PaymentDistributed');
+
+    console.log('Setting up event listeners for SuccessfulTokenPurchase and PaymentDistributed');
+
+
     // Listen for successful token purchases
     contract.on('SuccessfulTokenPurchase', (invoiceId, buyer, amount, event) => {
       if (buyer.toLowerCase() === address.toLowerCase()) {
-        const amountInEth = parseFloat(ethers.utils.formatEther(amount));
+        const amountInEth = parseFloat(ethers.formatEther(amount));
         setPaymentHistory(prev => [{
           id: Date.now(),
           invoice: `#${invoiceId.toString()}`,
@@ -156,7 +164,8 @@ const Investor = () => {
     });
 
     return () => {
-      contract.removeAllListeners();
+      contract.removeAllListeners('SuccessfulTokenPurchase');
+      contract.removeAllListeners('PaymentDistributed');
     };
   };
 
@@ -169,7 +178,7 @@ const Investor = () => {
   }, [availableInvoices, filterStatus]);
 
   const stats = useMemo(() => {
-    const totalValue = availableInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+    const totalValue = availableInvoices.reduce((sum, inv) => sum + ethers.formatEther(inv.amount), 0);
     const readyForFunding = availableInvoices.filter(inv =>
       inv.status === 'ReadyForFunding'
     ).length;
@@ -263,17 +272,30 @@ const Investor = () => {
       // Convert investment amount to wei
       // const amountInWei = ethers.utils.parseEther(investmentAmount);
 
+      const priceOfOneTokenInEth = tokenData[selectedInvoice.id]?.priceOfOneTokenInEth || 0;
+      if (priceOfOneTokenInEth <= 0) {
+        alert('Price of one token is not available or invalid.');
+        setLoading(false);
+        return;
+      }
+      console.log('Price of one token in ETH:', priceOfOneTokenInEth);
+      console.log('Investment amount:', investmentAmount);
       const totalValue = priceOfOneTokenInEth * investmentAmount;
-      const amountInWei = ethers.parseEther(totalValue.toString());
+      const totalValueInWei = ethers.parseEther(totalValue.toString());
+      const investmentAmountInWei = ethers.parseEther(investmentAmount.toString());
+      console.log(`Investment amount in wei: ${investmentAmountInWei}`);
+      console.log(`Total value in wei: ${totalValueInWei}`);
+      const maxSupply = tokenData[selectedInvoice.id]?.maxSupply || 0;
+      console.log(`Max supply for invoice ${selectedInvoice.id}: ${maxSupply}`);
 
       // Call buyTokens function
-      const tx = await contract.buyTokens(selectedInvoice.id, investmentAmount, {
-        value: amountInWei
+      const tx = await contract.buyTokens(selectedInvoice.id, investmentAmountInWei, {
+        value: totalValueInWei
       });
-
+      console.log(`Transaction sent: ${tx.hash}`);
       await tx.wait();
 
-      alert(`Investment of ${parseFloat(totalValue).toLocaleString()} ETH processed successfully!\n\nChainlink Automation will handle payment distribution when the invoice is paid.`);
+      alert(`Investment of ${investmentAmount} ETH processed successfully!\n\nChainlink Automation will handle payment distribution when the invoice is paid.`);
 
       setSelectedInvoice(null);
       setInvestmentAmount('');
@@ -289,33 +311,51 @@ const Investor = () => {
     }
   };
 
-  const getPriceOfOneTokenInEth = async (invoiceId) => {
-    if (!contract || !invoiceId) return 0;
+  const fetchTokenData = async (invoiceId) => {
+    if (!contract) return;
 
     try {
-      console.log('Fetching token price for invoice ID:', invoiceId);
-      const priceInWei = await contract.getPriceOfTokenInEth(invoiceId);
-      setPriceOfOneTokenInEth(parseFloat(ethers.formatEther(priceInWei)).toFixed(4));
-      return parseFloat(ethers.formatEther(priceInWei)).toFixed(4);
-    } catch (error) {
-      console.error('Error fetching token price:', error);
-      return 0;
-    }
-  }
+      const [tokenAddress, totalSupply, maxSupply, priceOfOneTokenInEth] = await Promise.all([
+        contract.getInvoiceTokenAddress(invoiceId),
+        contract.getTotalSupply(invoiceId),
+        contract.getMaxSupply(invoiceId),
+        contract.getPriceOfTokenInEth(invoiceId)
+      ]);
 
-  const getTokenAddress = async (invoiceId) => {
-    if (!contract || !invoiceId) return null;
+      console.log(`Token data for invoice ${invoiceId}:`);
+      console.log('Max Supply:', maxSupply);
 
-    try {
-      const tokenDetails = await contract.getTokenDetails(invoiceId);
-      return {
-        tokenAddress: tokenDetails.tokenAddress,
-      };
+
+      setTokenData(prev => ({
+        ...prev,
+        [invoiceId]: {
+          address: tokenAddress || '',
+          purchased: totalSupply || 0,
+          maxSupply: maxSupply || 0,
+          priceOfOneTokenInEth: priceOfOneTokenInEth ? parseFloat(ethers.formatEther(priceOfOneTokenInEth)) : 0
+        }
+      }));
     } catch (error) {
-      console.error('Error fetching token address:', error);
-      return null;
+      console.error(`Error fetching token data for invoice ${invoiceId}:`, error);
+      setTokenData(prev => ({
+        ...prev,
+        [invoiceId]: {
+          address: '',
+          purchased: 0,
+          maxSupply: 0,
+          priceOfOneTokenInEth: 0
+        }
+      }));
     }
-  }
+  };
+
+
+  useEffect(() => {
+    if (selectedInvoice && selectedInvoice.status === 'ReadyForFunding') {
+      fetchTokenData(selectedInvoice.id);
+    }
+    console.log('Selected Invoice:', selectedInvoice);
+  }, [selectedInvoice, contract]);
 
   const formatAddress = (address) => {
     if (!address) return '';
@@ -526,6 +566,8 @@ const Investor = () => {
             const displayStatus = invoice.status;
             const buttonConfig = getButtonConfig(invoice);
             const investable = isInvestable(invoice);
+            const maxSupply = ethers.formatEther(invoice.maxSupply || 0);
+            const fundedAmount = ethers.formatEther(invoice.fundedAmount || 0);
 
             return (
               <div
@@ -547,7 +589,7 @@ const Investor = () => {
                   {/* Amount */}
                   <div className="mb-4">
                     <div className={`text-3xl font-black mb-1 ${investable ? 'text-white' : 'text-gray-500'}`}>
-                      ${invoice.amount.toLocaleString()}
+                      ${parseFloat(ethers.formatEther(invoice.amount))}
                     </div>
                     <div className="text-gray-400 text-sm">
                       {displayStatus === 'Paid' ? 'Paid by buyer' :
@@ -562,17 +604,17 @@ const Investor = () => {
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-gray-400 text-xs font-medium">FUNDING PROGRESS</span>
                         <span className="text-white text-xs font-bold">
-                          {((invoice.fundedAmount / invoice.amount) * 100).toFixed(0)}%
+                          {((fundedAmount / maxSupply) * 100).toFixed(0)}%
                         </span>
                       </div>
                       <div className="w-full bg-gray-700/50 rounded-full h-2">
                         <div
                           className="bg-gradient-to-r from-purple-500 to-cyan-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${(invoice.fundedAmount / invoice.amount) * 100}%` }}
+                          style={{ width: `${(fundedAmount / maxSupply) * 100}%` }}
                         />
                       </div>
                       <div className="text-gray-400 text-xs mt-1">
-                        ${invoice.fundedAmount.toLocaleString()} / ${invoice.amount.toLocaleString()}
+                        ${fundedAmount} / ${maxSupply} funded
                       </div>
                     </div>
                   )}
@@ -709,7 +751,7 @@ const Investor = () => {
       {/* Investment Modal */}
       {selectedInvoice && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-xl border border-gray-700/50 rounded-3xl p-8 max-w-md w-full shadow-2xl shadow-purple-500/20">
+          <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-xl border border-gray-700/50 rounded-3xl p-8 max-w-2xl w-full shadow-2xl shadow-purple-500/20">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-black text-white">Invest in Invoice</h3>
               <button
@@ -737,14 +779,18 @@ const Investor = () => {
                 <span className="text-gray-400 font-medium">Days to Payment</span>
                 <span className="text-white font-bold">{selectedInvoice.daysToPayment} days</span>
               </div>
-              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
-                <span className="text-gray-400 font-medium">Token Address</span>
-                <span className="text-white font-bold">{/*getTokenAddress(selectedInvoice.id)*/}</span>
-              </div>
-              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
-                <span className="text-gray-400 font-medium">Price of One Token</span>
-                <span className="text-white font-bold">{/*getPriceOfOneTokenInEth(selectedInvoice.id)*/}ETH</span>
-              </div>
+              {selectedInvoice.status === 'ReadyForFunding' && (
+                <>
+                  <div className="flex justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-gray-400 font-medium">Token Address</span>
+                    <span className="text-white font-bold text-sm break-all">{tokenData[selectedInvoice.id]?.address || "Loading..."}</span>
+                  </div>
+                  <div className="flex justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-gray-400 font-medium">Price of One Token</span>
+                    <span className="text-white font-bold">{tokenData[selectedInvoice.id]?.priceOfOneTokenInEth || "Loading..."}ETH</span>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="mb-6">
