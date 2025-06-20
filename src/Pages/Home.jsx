@@ -268,7 +268,7 @@ const Home = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">
   <div className="text-gray-400 font-medium mb-2">Platform Growth</div>
-  <div className="text-green-400 font-black text-3xl">+42%</div>
+  <div className="text-green-400 font-black text-3xl">+60%</div>
   <div className="text-green-400">Past 30 Days</div>
 </div>
 
@@ -535,7 +535,7 @@ const Home = () => {
         <div className="pt-8 border-t border-gray-700/30">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="text-gray-400 text-sm mb-4 md:mb-0">
-              © 2024 InvoiceFinance. All rights reserved.
+              © 2025 InvoiceFinance. All rights reserved.
             </div>
             
             <div className="flex items-center space-x-6">

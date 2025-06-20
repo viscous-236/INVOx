@@ -65,7 +65,7 @@ const Buyer = () => {
           const roleInNum = Number(role);
 
           if (roleInNum !== 1) {
-            alert('You do not have permission to access this dashboard. Please switch to the Buyer role.');
+            alert('You do not have permission to access this dashboard. Only Buyers can view this page.');
             navigate('/');
             return;
           }

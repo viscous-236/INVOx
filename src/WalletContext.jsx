@@ -18,6 +18,7 @@ export const WalletProvider = ({ children }) => {
   const [contract, setContract] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [provider, setProvider] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -45,6 +46,7 @@ export const WalletProvider = ({ children }) => {
         setAddress(null);
         setContract(null);
         setIsConnected(false);
+        setProvider(null);
       } else {
         connectToWallet();
       }
@@ -94,6 +96,7 @@ export const WalletProvider = ({ children }) => {
       setAddress(userAddress);
       setContract(contractInstance);
       setIsConnected(true);
+      setProvider(provider);
 
       return true;
     } catch (error) {
@@ -101,6 +104,7 @@ export const WalletProvider = ({ children }) => {
       setAddress(null);
       setContract(null);
       setIsConnected(false);
+      setProvider(null);
       return false;
     }
   };
@@ -133,6 +137,7 @@ export const WalletProvider = ({ children }) => {
     setAddress(null);
     setContract(null);
     setIsConnected(false);
+    setProvider(null);
   };
 
   const value = {
@@ -141,7 +146,8 @@ export const WalletProvider = ({ children }) => {
     isConnected,
     isConnecting,
     connectWallet,
-    disconnectWallet
+    disconnectWallet,
+    provider
   };
 
   return (
