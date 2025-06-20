@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useWallet } from '../WalletContext';
-
 
 const Buyer = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -13,10 +13,10 @@ const Buyer = () => {
   // Web3 state
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [userRole, setUserRole] = useState(null);
   const [error, setError] = useState('');
   
-  const { address, contract, isConnected, connectWallet } = useWallet();
+  const { address, contract, isConnected } = useWallet();
+  const navigate = useNavigate();
 
   // Contract enums - Updated to match supplier dashboard
   const INVOICE_STATUS = {
@@ -49,61 +49,53 @@ const Buyer = () => {
     };
   }, []);
 
+  // Load buyer's invoices when contract is available
   useEffect(() => {
     if (contract && address && isConnected) {
-      checkUserRole();
+      loadBuyerInvoices();
     }
   }, [contract, address, isConnected]);
 
+  // Check user role and permissions
   useEffect(() => {
-    if (contract && address && isConnected && userRole === 1) {
-      loadBuyerInvoices();
-    }
-  }, [contract, address, isConnected, userRole]);
+    const checkUserRole = async () => {
+      if (contract && address) {
+        try {
+          const role = await contract.getUserRole(address);
+          const roleInNum = Number(role);
 
+          if (roleInNum !== 1) {
+            alert('You do not have permission to access this dashboard. Please switch to the Buyer role.');
+            navigate('/');
+            return;
+          }
 
-  const checkUserRole = async () => {
-    if (!contract || !address) return;
-
-    try {
-      setLoading(true);
-      const role = await contract.getUserRole(address);
-      const roleNumber = Number(role);
-      setUserRole(roleNumber);
-      
-      // If user is not a buyer (role 1), prompt them to choose buyer role
-      if (roleNumber !== 1) {
-        const shouldChooseRole = window.confirm('You need to register as a Buyer to access this page. Would you like to register now?');
-        if (shouldChooseRole) {
-          await chooseRole(1); // 1 = Buyer
+          await loadBuyerInvoices();
+        } catch (err) {
+          console.error('Error checking user role:', err);
+          alert('Error checking user permissions. Please try again.');
+          navigate('/');
         }
+      } else {
+        alert('Please connect your wallet to access the Buyer dashboard.');
+        navigate('/');
       }
-    } catch (error) {
-      console.error('Error checking user role:', error);
-      // If the user hasn't chosen any role, prompt them
-      const shouldChooseRole = window.confirm('You need to register as a Buyer to access this page. Would you like to register now?');
-      if (shouldChooseRole) {
-        await chooseRole(1);
-      }
-    } finally {
-      setLoading(false);
+    };
+
+    if (isConnected) {
+      checkUserRole();
     }
-  };
+  }, [contract, address, isConnected, navigate]);
 
-  const chooseRole = async (role) => {
-    if (!contract) return;
-
+  const getTotalDebtAmount = async (invoiceId) => {
+    if (!contract) return 0;
+    
     try {
-      setLoading(true);
-      const tx = await contract.chooseRole(role);
-      await tx.wait();
-      setUserRole(role);
-      alert('Role selected successfully! You are now registered as a Buyer.');
+      const totalDebtBN = await contract._getTotalDebtAmount(invoiceId);
+      return Number(ethers.formatEther(totalDebtBN));
     } catch (error) {
-      console.error('Error choosing role:', error);
-      alert('Error choosing role: ' + (error.reason || error.message));
-    } finally {
-      setLoading(false);
+      console.error(`Error getting total debt for invoice ${invoiceId}:`, error);
+      return 0;
     }
   };
 
@@ -140,23 +132,24 @@ const invoicePromises = invoiceIds.map(async (id) => {
     
     // Calculate penalty (assuming 1% per day overdue, max 10%)
     const baseAmount = Number(ethers.formatEther(details[3]));
-    const penalty = isOverdue ? Math.min(baseAmount * 0.01 * daysOverdue, baseAmount * 0.1) : 0;
-    const totalDue = baseAmount + penalty;
+    const totalDebtAmount = await getTotalDebtAmount(Number(details[0]));
+    const penaltyAmount = totalDebtAmount - baseAmount;
+   
     
     return {
       id: Number(details[0]),           
       supplier: details[1],             
       buyer: details[2],                
       amount: baseAmount,               
-      investors: details[4],            
-      status: INVOICE_STATUS[Number(details[5])] || 'Unknown',  
+      investors: details[4],   
+      status: isOverdue ? 'Overdue' : INVOICE_STATUS[Number(details[5])] || 'Unknown',          
       statusCode: Number(details[5]),   
       dueDate: dueDate.toISOString().split('T')[0], 
       totalInvestment: Number(ethers.formatEther(details[7])), 
       isOverdue,
       daysOverdue,
-      penalty,
-      totalDue,
+      penalty: Math.max(0, penaltyAmount),
+      totalDue: totalDebtAmount,
       description: `Invoice #${Number(details[0])} from ${formatAddress(details[1])}`
     };
   } catch (err) {
@@ -187,11 +180,11 @@ const invoicePromises = invoiceIds.map(async (id) => {
 
   const stats = useMemo(() => {
     const overdue = invoices.filter(inv => inv.isOverdue);
-    const approved = invoices.filter(inv => inv.statusCode === 2);
+    const approved = invoices.filter(inv => inv.statusCode === 2 && !inv.isOverdue);
     const paid = invoices.filter(inv => inv.statusCode === 4);
     const pending = invoices.filter(inv => inv.statusCode === 0);
     const totalPending = invoices.reduce((sum, inv) => sum + (inv.statusCode !== 4 ? inv.totalDue : 0), 0);
-    const totalPenalties = invoices.reduce((sum, inv) => sum + inv.penalty, 0);
+    const totalPenalties = invoices.reduce((sum, inv) => sum + (inv.penalty || 0), 0);
 
     return {
       totalInvoices: invoices.length,
@@ -203,6 +196,8 @@ const invoicePromises = invoiceIds.map(async (id) => {
       totalPenalties
     };
   }, [invoices]);
+
+  
 
   const handlePayInvoice = (invoice) => {
   // Validate invoice status
@@ -218,7 +213,7 @@ const invoicePromises = invoiceIds.map(async (id) => {
   }
 
   setSelectedInvoice(invoice);
-  setPaymentAmount(invoice.amount.toString());
+  setPaymentAmount(invoice.totalDue.toString());
 };
 const processPayment = async () => {
   if (!selectedInvoice || !contract) return;
@@ -228,40 +223,40 @@ const processPayment = async () => {
     
     // Get the invoice details
     const invoice = await contract.getInvoice(selectedInvoice.id);
-    const invoiceAmount = invoice.amount; 
+      const totalDebtAmount = await contract._getTotalDebtAmount(selectedInvoice.id);
+      
+      const ethPerDollar = await contract.getPriceOfTokenInEth(selectedInvoice.id);
+      const totalPaymentInWei = (totalDebtAmount * ethPerDollar) / ethers.parseEther("1");
     
-   
-    const ethPerDollar = await contract.getPriceOfTokenInEth(selectedInvoice.id);
-    
-    const totalPaymentInWei = (invoiceAmount * ethPerDollar) / ethers.parseEther("1");
-    
-    console.log('Payment calculation:', {
-      invoiceId: selectedInvoice.id,
-      invoiceAmountUSD: ethers.formatEther(invoiceAmount),
-      ethPerDollar: ethers.formatEther(ethPerDollar),
-      totalPaymentETH: ethers.formatEther(totalPaymentInWei),
-      invoiceAmountRaw: invoiceAmount.toString(),
-      ethPerDollarRaw: ethPerDollar.toString(),
-      totalPaymentRaw: totalPaymentInWei.toString()
-    });
+    console.log('Payment calculation with penalties:', {
+        invoiceId: selectedInvoice.id,
+        baseAmountUSD: ethers.formatEther(invoice.amount),
+        totalDebtAmountUSD: ethers.formatEther(totalDebtAmount),
+        ethPerDollar: ethers.formatEther(ethPerDollar),
+        totalPaymentETH: ethers.formatEther(totalPaymentInWei),
+        penaltyUSD: ethers.formatEther(totalDebtAmount - invoice.amount)
+      });
     
     // ✅ Add validation to prevent sending 0 or negative amounts
     if (totalPaymentInWei <= 0n) {
       alert('❌ Error: Invalid payment amount calculated. Please check the price feed.');
       return;
     }
-    
-    // Confirm payment with user
-    const confirmMessage = `
-Invoice Amount: ${ethers.formatEther(invoiceAmount)} USD
+    const baseAmount = ethers.formatEther(invoice.amount);
+    const totalDebt = ethers.formatEther(totalDebtAmount);
+    const penalty = ethers.formatEther(totalDebtAmount - invoice.amount);
+   
+     const confirmMessage = ` 
+Invoice Amount: ${baseAmount} USD
+${Number(penalty) > 0 ? `Penalty: ${penalty} USD\n` : ''}Total Due: ${totalDebt} USD
 Payment in ETH: ${ethers.formatEther(totalPaymentInWei)} ETH
 
 Proceed with payment?
-    `;
-    
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
+      `;
+      
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
     
     // ✅ Add balance check before sending transaction
     const signer = await contract.runner;
@@ -329,6 +324,7 @@ Proceed with payment?
   const getStatusBadge = (status) => {
     const statusStyles = {
       'Approved': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+      'Overdue': 'bg-red-500/20 text-red-400 border-red-500/40',
       'Paid': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
       'Pending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
       'Verification In Progress': 'bg-purple-500/20 text-purple-400 border-purple-500/40',
@@ -342,33 +338,24 @@ Proceed with payment?
     );
   };
 
-  const getStatusIcon = (status) => {
-    const icons = {
-      'Pending': '⏳',
-      'Verification In Progress': '🔍',
-      'Approved': '✅',
-      'Paid': '🏦',
-      'Rejected': '❌'
-    };
-    return icons[status] || '📄';
-  };
+ 
 
   const formatAddress = (addr) => {
     if (!addr) return '';
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const diffTime = date - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
-    if (diffDays === 0) return 'Due today';
-    if (diffDays === 1) return 'Due tomorrow';
-    return `Due in ${diffDays} days`;
-  };
+ const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  const today = new Date();
+  const diffTime = date - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
+  if (diffDays === 0) return 'Due today';
+  if (diffDays === 1) return 'Due tomorrow';
+  return `Due in ${diffDays} days`;
+};
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-black">
@@ -387,7 +374,7 @@ Proceed with payment?
       />
 
       {/* Header */}
-      <header className="relative z-20">
+           <header className="relative z-20">
         <nav
           className="flex items-center justify-between px-8 py-6 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
           style={{
@@ -407,30 +394,22 @@ Proceed with payment?
               InvoiceFinance
             </div>
             <div className="hidden lg:block px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs text-purple-300 font-medium">
-              {userRole !== null ? USER_ROLE[userRole] : 'BUYER'}
+               BUYER
             </div>
           </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center space-x-4">
-            {!isConnected ? (
-              <button
-                onClick={connectWallet}
-                className="bg-gradient-to-r from-purple-600 to-cyan-600 text-white px-6 py-2 rounded-xl hover:from-purple-500 hover:to-cyan-500 transition-all duration-300 font-bold"
-              >
-                Connect Wallet
-              </button>
-            ) : (
-              <>
-                <div className="text-gray-400 text-sm">
-                  <span className="text-gray-300 font-medium">
-                    {formatAddress(address)}
-                  </span>
-                </div>
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              </>
-            )}
+               <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 bg-orange-500/20 border border-orange-500/30 rounded-full px-3 py-1">
+              <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" />
+              <span className="text-orange-300 text-xs font-bold">CHAINLINK AUTOMATION ACTIVE</span>
+            </div>
+            
+            <div className="text-gray-400 text-sm">
+              <span className="text-gray-300 font-medium">{formatAddress(address)}</span>
+              
+            </div>
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
           </div>
+    
         </nav>
       </header>
 
@@ -473,22 +452,7 @@ Proceed with payment?
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-8 py-12">
-        {!isConnected ? (
-          <div className="text-center py-20">
-            <div className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
-              Connect Your Wallet
-            </div>
-            <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">
-              Please connect your MetaMask wallet to access the buyer marketplace
-            </p>
-            <button
-              onClick={connectWallet}
-              className="bg-gradient-to-r from-purple-600 to-cyan-600 text-white px-8 py-4 rounded-xl hover:from-purple-500 hover:to-cyan-500 transition-all duration-300 font-bold text-lg"
-            >
-              Connect Wallet
-            </button>
-          </div>
-        ) : (
+        
           <>
             {/* Page Header */}
             <div className="text-center mb-12">
@@ -509,16 +473,16 @@ Proceed with payment?
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
               {[
-                {
-                  value: stats.overdueCount,
-                  label: "Overdue",
-                  change: "Requires attention",
-                  icon: "⚠️",
-                  gradient: "from-red-200/1 to-orange-700/20",
-                  border: "border-red-500/40",
-                  hoverBorder: "hover:border-red-400/70",
-                  accent: "red"
-                },
+               {
+  value: stats.overdueCount,
+  label: "Overdue",
+  change: "Requires attention",
+  icon: "⚠️",
+  gradient: "from-yellow-200/1 to-amber-700/20",
+  border: "border-yellow-500/40",
+  hoverBorder: "hover:border-yellow-400/70",
+  accent: "yellow"
+},
                 {
                   value: stats.approvedCount,
                   label: "Approved",
@@ -530,25 +494,25 @@ Proceed with payment?
                   accent: "emerald"
                 },
                 {
-                  value: `${stats.totalPending} USD`,
+                  value: `$${stats.totalPending.toFixed(2)}`,
                   label: "Total Due",
                   change: "Outstanding amount",
                   icon: "💰",
-                  gradient: "from-cyan-200/1 to-blue-700/15",
+                  gradient: "from-cyan-200/1 to-white-700/15",
                   border: "border-cyan-500/40",
                   hoverBorder: "hover:border-cyan-400/70",
                   accent: "cyan"
                 },
-                {
-                  value: `${stats.totalPenalties} USD`,
-                  label: "Penalties",
-                  change: "Late fees",
-                  icon: "📈",
-                  gradient: "from-orange-200/1 to-orange-700/20",
-                  border: "border-orange-500/40",
-                  hoverBorder: "hover:border-orange-400/70",
-                  accent: "orange"
-                }
+               {
+  value: `$${stats.totalPenalties.toFixed(2)}`,
+  label: "Penalties",
+  change: "Late fees",
+  icon: "📈",
+  gradient: "from-red-200/1 to-red-700/20",
+  border: "border-red-500/40",
+  hoverBorder: "hover:border-red-400/70",
+  accent: "red"
+}
               ].map((stat, index) => (
                 <div
                   key={index}
@@ -613,7 +577,7 @@ Proceed with payment?
                     {/* Header */}
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center space-x-3">
-                        <span className="text-2xl">{getStatusIcon(invoice.status)}</span>
+                        
                         <div className="text-lg font-black text-white">#{invoice.id}</div>
                       </div>
                       {getStatusBadge(invoice.status)}
@@ -636,18 +600,18 @@ Proceed with payment?
                     <div className="bg-white/5 rounded-xl p-4 mb-4">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-gray-400 text-xs font-medium">AMOUNT</span>
-                        <span className="text-white font-bold">{invoice.amount} USD</span>
+                        <span className="text-white font-bold">${invoice.amount}</span>
                       </div>
                       {invoice.penalty > 0 && (
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-red-400 text-xs font-medium">PENALTY</span>
-                          <span className="text-red-400 font-bold">+{invoice.penalty} USD</span>
+                          <span className="text-red-400 font-bold">+${invoice.penalty.toFixed(2)}</span>
                         </div>
                       )}
                       <div className="border-t border-gray-600/50 pt-2">
                         <div className="flex justify-between items-center">
                           <span className="text-cyan-400 text-sm font-bold">TOTAL DUE</span>
-                          <span className="text-cyan-400 font-black text-lg">{invoice.totalDue} USD</span>
+                          <span className="text-cyan-400 font-black text-lg">${invoice.totalDue.toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
@@ -670,32 +634,32 @@ Proceed with payment?
                     </div>
 
                     {/* Action Button */}
-                    <button
-                      onClick={() => handlePayInvoice(invoice)}
-                      disabled={invoice.status === 'Paid' || invoice.status !== 'Approved'}
-                      className={`w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group ${
-                        invoice.status === 'Paid' 
-                          ? 'bg-gray-600/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
-                          : invoice.status === 'Approved'
-                          ? 'bg-gradient-to-r from-purple-600/50 via-purple-700/50 to-cyan-600/50 text-white hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 border-purple-400/30 hover:border-purple-300/60'
-                          : 'bg-gray-700/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
-                      }`}
-                    >
-                      <span className="relative z-10 flex items-center justify-center space-x-2">
-                        <span>{invoice.status === 'Paid' ? '✅' : '💳'}</span>
-                        <span>
-                          {invoice.status === 'Paid' 
-                            ? 'Paid' 
-                            : invoice.status === 'Approved'
-                            ? `Pay ${invoice.totalDue} USD`
-                            : `${invoice.status}`
-                          }
-                        </span>
-                      </span>
-                      {invoice.status === 'Approved' && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-                      )}
-                    </button>
+                   <button
+  onClick={() => handlePayInvoice(invoice)}
+  disabled={invoice.statusCode === 4 || invoice.statusCode !== 2} // Changed from invoice.status checks
+  className={`w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group ${
+    invoice.statusCode === 4 // Changed from invoice.status === 'Paid'
+      ? 'bg-gray-600/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
+      : invoice.statusCode === 2 // Changed from invoice.status === 'Approved'
+      ? 'bg-gradient-to-r from-purple-600/50 via-purple-700/50 to-cyan-600/50 text-white hover:from-purple-500 hover:via-purple-600 hover:to-cyan-500 shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 border-purple-400/30 hover:border-purple-300/60'
+      : 'bg-gray-700/50 text-gray-400 border-gray-600/30 cursor-not-allowed'
+  }`}
+>
+  <span className="relative z-10 flex items-center justify-center space-x-2">
+    <span>{invoice.statusCode === 4 ? '✅' : '💳'}</span> {/* Changed from invoice.status === 'Paid' */}
+    <span>
+      {invoice.statusCode === 4 // Changed from invoice.status === 'Paid'
+        ? 'Paid' 
+        : invoice.statusCode === 2 // Changed from invoice.status === 'Approved'
+        ? `Pay $${invoice.totalDue}`
+        : `${invoice.status}`
+      }
+    </span>
+  </span>
+  {invoice.statusCode === 2 && ( // Changed from invoice.status === 'Approved'
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+  )}
+</button>
                   </div>
                 </div>
               ))}
@@ -713,75 +677,80 @@ Proceed with payment?
                 </div>
               </div>
             )}
-          </>
-        )}
+          
+        
+        </>
       </main>
+{/* Payment Modal */}
+{selectedInvoice && (
+  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-4 max-w-md w-full mx-4 shadow-2xl shadow-purple-500/20 max-h-[95vh]">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold text-white">Payment Details</h3>
+        <button
+          onClick={() => setSelectedInvoice(null)}
+          className="text-gray-400 hover:text-white transition-colors text-xl"
+        >
+          ✕
+        </button>
+      </div>
 
-      {/* Payment Modal */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-xl border border-gray-700/50 rounded-3xl p-8 max-w-md w-full shadow-2xl shadow-purple-500/20">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-white">Payment Confirmation</h3>
-              <button
-                onClick={() => setSelectedInvoice(null)}
-                className="text-gray-400 hover:text-white transition-colors text-xl"
-              >
-                ✕
-              </button>
-            </div>
+      <div className="space-y-2 mb-4">
+        <div className="flex justify-between p-2 bg-white/5 rounded-lg">
+          <span className="text-gray-400 font-medium text-sm">Invoice #</span>
+          <span className="text-white font-bold text-sm">{selectedInvoice.id}</span>
+        </div>
+        <div className="flex justify-between p-2 bg-white/5 rounded-lg">
+          <span className="text-gray-400 font-medium text-sm">Supplier</span>
+          <span className="text-white font-bold text-right text-sm" title={selectedInvoice.supplier}>
+            {formatAddress(selectedInvoice.supplier)}
+          </span>
+        </div>
+        <div className="flex justify-between p-2 bg-white/5 rounded-lg">
+          <span className="text-gray-400 font-medium text-sm">Amount</span>
+          <span className="text-white font-bold text-sm">${selectedInvoice.amount}</span>
+        </div>
+        <div className="flex justify-between p-2 bg-white/5 rounded-lg">
+          <span className="text-gray-400 font-medium text-sm">Due Date</span>
+          <span className="text-white font-bold text-sm">{selectedInvoice.dueDate}</span>
+        </div>
+        {selectedInvoice.penalty > 0 && (
+          <div className="flex justify-between p-2 bg-red-500/10 rounded-lg border border-red-500/30">
+            <span className="text-red-400 font-medium text-sm">Late Penalty</span>
+            <span className="text-red-400 font-bold text-sm">${selectedInvoice.penalty}</span>
+          </div>
+        )}
+        <div className="flex justify-between p-2 bg-purple-500/10 rounded-lg border border-purple-500/30">
+          <span className="text-purple-300 font-medium text-sm">Total Due</span>
+          <span className="text-purple-300 font-bold">${selectedInvoice.totalDue}</span>
+        </div>
+      </div>
 
-            <div className="space-y-4 mb-6">
-              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
-                <span className="text-gray-400 font-medium">Invoice #</span>
-                <span className="text-white font-bold">{selectedInvoice.id}</span>
-              </div>
-              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
-                <span className="text-gray-400 font-medium">Supplier</span>
-                <span className="text-white font-bold text-sm">{formatAddress(selectedInvoice.supplier)}</span>
-              </div>
-              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
-                <span className="text-gray-400 font-medium">Original Amount</span>
-                <span className="text-white font-bold">{selectedInvoice.amount} USD</span>
-              </div>
-              {selectedInvoice.penalty > 0 && (
-                <div className="flex justify-between p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <span className="text-red-400 font-medium">Penalty</span>
-                  <span className="text-red-400 font-bold">{selectedInvoice.penalty} USD</span>
-                </div>
-              )}
-              <div className="flex justify-between text-xl font-black border-t pt-4 p-3 bg-cyan-500/10 border-cyan-500/30 rounded-lg">
-                <span className="text-white">Total Due</span>
-                <span className="text-cyan-400">{selectedInvoice.totalDue} USD</span>
-              </div>
-            </div>
+      <div className="mb-4">
+        <label className="block text-gray-300 text-xs font-medium mb-2">
+          Payment Amount (Locked)
+        </label>
+        <div className="w-full bg-white/10 border border-gray-600/50 rounded-lg px-3 py-2 text-white font-bold bg-gradient-to-r from-purple-500/10 to-cyan-500/10">
+          ${selectedInvoice.totalDue}
+        </div>
+      </div>
 
-            <div className="space-y-4">
-              <div>
-                <div className="block text-gray-400 text-sm mb-2 font-medium">Payment Amount (USD)</div>
-                <input
-                  type="number"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full bg-gray-700/50 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-purple-500 focus:outline-none font-bold text-lg"
-                />
-              </div>
+      <div className="flex space-x-4">
+        <button
+          onClick={() => setSelectedInvoice(null)}
+          className="flex-1 py-3 px-4 bg-gray-700/50 text-gray-300 rounded-xl font-bold hover:bg-gray-600/50 transition-all duration-300 cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={processPayment}
+          className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
+        >
+          Process Payment
+        </button>
+      </div>
 
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => setSelectedInvoice(null)}
-                  className="flex-1 bg-gray-700/50 text-gray-300 py-3 rounded-xl hover:bg-gray-600/50 transition-all duration-300 font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={processPayment}
-                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600 text-white py-3 rounded-xl hover:from-purple-500 hover:to-cyan-500 transition-all duration-300 font-bold shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 cursor-pointer"
-                >
-                  Confirm Payment
-                </button>
-              </div>
-            </div>
+      
           </div>
         </div>
       )}

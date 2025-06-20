@@ -1,6 +1,6 @@
 import {ethers} from 'ethers';
 
-const CONTRACT_ADDRESS = '0x7c147D3967f2fDC40009595B23a3186109C032b8';
+const CONTRACT_ADDRESS = '0xeEE44b425088BBaB1c0c50D1872540689c9c62A5';
 
 
 const CONTRACT_ABI = [
@@ -29,6 +29,7 @@ const CONTRACT_ABI = [
   "function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData)",
   "function performUpkeep(bytes calldata performData) external",
   "function tokenGeneration(uint256 invoiceId, uint256 amount) external",
+  "function _getTotalDebtAmount(uint256 _invoiceId) public view returns (uint256)",
 
   // Getter Functions
   "function getBuyerInvoiceIds(address _buyer) external view returns (uint256[] memory)",
