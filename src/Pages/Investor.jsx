@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../WalletContext';
 import { ethers } from 'ethers';
@@ -11,13 +11,15 @@ const Investor = () => {
   const [scrollY, setScrollY] = useState(0);
   const [showPayments, setShowPayments] = useState(false);
   const [availableInvoices, setAvailableInvoices] = useState([]);
-  // const [priceOfOneTokenInEth, setPriceOfOneTokenInEth] = useState(0);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tokenData, setTokenData] = useState({});
+  const [lastPolledBlock, setLastPolledBlock] = useState(0);
+  const [pollingInterval, setPollingInterval] = useState(null);
   const navigate = useNavigate();
 
   const { address, contract, isConnected, provider } = useWallet();
+
 
   // Convert contract status to display status
   const getDisplayStatus = (contractStatus) => {
@@ -31,6 +33,136 @@ const Investor = () => {
     }
   };
 
+  // Enhanced addToPaymentHistory with better duplicate detection
+  const addToPaymentHistory = useCallback((newPayment) => {
+    setPaymentHistory(prev => {
+      // Check for duplicates using multiple criteria
+      const exists = prev.some(payment => {
+        // Check by unique ID (transaction hash + log index for polling)
+        if (payment.id === newPayment.id) return true;
+
+        // Check by transaction hash (for manual entries)
+        if (payment.txHash && newPayment.txHash && payment.txHash === newPayment.txHash) return true;
+
+        // Check by invoice, amount, and approximate time (for events without tx hash)
+        if (payment.invoice === newPayment.invoice &&
+          Math.abs(payment.amount - newPayment.amount) < 0.0001 &&
+          Math.abs(new Date(payment.date).getTime() - new Date(newPayment.date).getTime()) < 300000) { // Within 5 minutes
+          return true;
+        }
+
+        return false;
+      });
+
+      if (!exists) {
+        console.log('Adding new payment to history:', newPayment);
+        return [newPayment, ...prev];
+      } else {
+        console.log('Duplicate payment detected, skipping:', newPayment);
+        return prev;
+      }
+    });
+  }, []);
+
+  // Enhanced polling mechanism for events
+  const pollForEvents = useCallback(async () => {
+    if (!contract || !address || !provider) return;
+
+    try {
+      const currentBlock = await provider.getBlockNumber();
+      const fromBlock = lastPolledBlock || Math.max(0, currentBlock - 5000); // Poll last 1000 blocks or from last polled block
+
+
+      // Create filters for both events
+      const tokenPurchaseFilter = contract.filters.SuccessfulTokenPurchase(null, address);
+      const paymentDistributedFilter = contract.filters.PaymentDistributed(null, address);
+
+      // Query both event types
+      const [tokenPurchaseEvents, paymentDistributedEvents] = await Promise.all([
+        contract.queryFilter(tokenPurchaseFilter, fromBlock, currentBlock),
+        contract.queryFilter(paymentDistributedFilter, fromBlock, currentBlock)
+      ]);
+
+      // Process token purchase events
+      tokenPurchaseEvents.forEach(event => {
+        const [invoiceId, buyer, amount] = event.args;
+        if (buyer.toLowerCase() === address.toLowerCase()) {
+          const amountInEth = parseFloat(ethers.formatEther(amount));
+          const newPayment = {
+            id: `${event.transactionHash}-${event.logIndex}`, // Unique ID based on tx hash and log index
+            invoice: `#${invoiceId.toString()}`,
+            amount: amountInEth,
+            timestamp: new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split('T')[0],
+            source: 'Token Purchase',
+            status: 'Completed',
+            txHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            fromPolling: true
+          };
+
+          addToPaymentHistory(newPayment);
+        }
+      });
+
+      // Process payment distributed events
+      paymentDistributedEvents.forEach(event => {
+        const [invoiceId, receiver, amount] = event.args;
+        if (receiver.toLowerCase() === address.toLowerCase()) {
+          const amountInEth = parseFloat(ethers.formatEther(amount));
+          const newPayment = {
+            id: `${event.transactionHash}-${event.logIndex}`, // Unique ID based on tx hash and log index
+            invoice: `#${invoiceId.toString()}`,
+            amount: amountInEth,
+            timestamp: new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split('T')[0],
+            source: 'Chainlink Automation',
+            status: 'Completed and Payment Distributed by Chainlink',
+            txHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            fromPolling: true
+          };
+
+          console.log('Found payment distributed event via polling:', newPayment);
+          addToPaymentHistory(newPayment);
+        }
+      });
+
+      // Update last polled block
+      setLastPolledBlock(currentBlock);
+
+    } catch (error) {
+      console.error('Error during event polling:', error);
+    }
+  }, [contract, address, provider, lastPolledBlock, addToPaymentHistory]);
+
+  // Start/stop polling based on connection status
+  useEffect(() => {
+    if (isConnected && contract && address) {
+      console.log('Starting event polling...');
+
+      // Initial poll
+      pollForEvents();
+
+      // Set up regular polling every 30 seconds
+      const interval = setInterval(pollForEvents, 30000);
+      setPollingInterval(interval);
+
+      return () => {
+        if (interval) {
+          console.log('Stopping event polling...');
+          clearInterval(interval);
+          setPollingInterval(null);
+        }
+      };
+    } else {
+      // Clean up polling when disconnected
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+      }
+    }
+  }, [isConnected, contract, address, pollForEvents]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -48,14 +180,11 @@ const Investor = () => {
     };
   }, []);
 
-
   const fetchInvoices = async () => {
     try {
-      setLoading(true);
 
 
       const getAllInvoiceIds = await contract.getAllInvoiceIds();
-
 
       const invoicePromises = getAllInvoiceIds.map(async (id) => {
         try {
@@ -82,21 +211,117 @@ const Investor = () => {
       });
 
       const invoices = (await Promise.all(invoicePromises)).filter(Boolean);
-
       setAvailableInvoices(invoices);
     } catch (error) {
       console.error('Error fetching invoices:', error);
     } finally {
-      setLoading(false);
     }
   };
+
+  // Enhanced event listener setup with better error handling and reconnection logic
+  const setupEventListeners = useCallback(() => {
+    if (!contract || !address) {
+      console.log('Contract or address not available for event listeners');
+      return;
+    }
+
+    // Clean up existing listeners
+    contract.removeAllListeners('SuccessfulTokenPurchase');
+    contract.removeAllListeners('PaymentDistributed');
+
+    console.log('Setting up event listeners for SuccessfulTokenPurchase and PaymentDistributed');
+
+    // Enhanced error handling for event listeners
+    const handleTokenPurchase = (invoiceId, buyer, amount, event) => {
+      try {
+        console.log('SuccessfulTokenPurchase event received:', { invoiceId, buyer, amount });
+
+        if (buyer.toLowerCase() === address.toLowerCase()) {
+          const amountInEth = parseFloat(ethers.formatEther(amount));
+          const newPayment = {
+            id: `${event.transactionHash}-${event.logIndex}`, // Use tx hash + log index for unique ID
+            invoice: `#${invoiceId.toString()}`,
+            amount: amountInEth,
+            timestamp: new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split('T')[0],
+            source: 'Token Purchase',
+            status: 'Completed',
+            txHash: event?.transactionHash || '',
+            blockNumber: event?.blockNumber || 0,
+            fromListener: true
+          };
+
+          addToPaymentHistory(newPayment);
+
+          // Refresh invoices to update funding status
+          setTimeout(() => {
+            fetchInvoices();
+          }, 2000); // Small delay to ensure blockchain state is updated
+        }
+      } catch (error) {
+        console.error('Error handling SuccessfulTokenPurchase event:', error);
+      }
+    };
+
+    const handlePaymentDistributed = (invoiceId, receiver, amount, event) => {
+      try {
+        console.log('PaymentDistributed event received:', { invoiceId, receiver, amount });
+
+        if (receiver.toLowerCase() === address.toLowerCase()) {
+          const amountInEth = parseFloat(ethers.formatEther(amount));
+          const newPayment = {
+            id: `${event.transactionHash}-${event.logIndex}`, // Use tx hash + log index for unique ID
+            invoice: `#${invoiceId.toString()}`,
+            amount: amountInEth,
+            timestamp: new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split('T')[0],
+            source: 'Chainlink Automation',
+            status: 'Completed',
+            txHash: event?.transactionHash || '',
+            blockNumber: event?.blockNumber || 0,
+            fromListener: true
+          };
+
+          addToPaymentHistory(newPayment);
+        }
+      } catch (error) {
+        console.error('Error handling PaymentDistributed event:', error);
+      }
+    };
+
+    // Set up event listeners with error handling
+    contract.on('SuccessfulTokenPurchase', handleTokenPurchase);
+    contract.on('PaymentDistributed', handlePaymentDistributed);
+
+    // Handle provider connection issues
+    if (provider) {
+      provider.on('disconnect', () => {
+        contract.removeAllListeners('SuccessfulTokenPurchase');
+        contract.removeAllListeners('PaymentDistributed');
+      });
+
+      provider.on('connect', () => {
+        console.log('Provider reconnected, setting up event listeners again');
+        // Reconnect listeners after a brief delay
+        setTimeout(() => {
+          setupEventListeners();
+        }, 1000);
+      });
+    }
+
+    return () => {
+      contract.removeAllListeners('SuccessfulTokenPurchase');
+      contract.removeAllListeners('PaymentDistributed');
+    };
+  }, [contract, address, provider, addToPaymentHistory]);
 
   useEffect(() => {
     if (isConnected && contract && address) {
       fetchInvoices();
-      setupEventListeners();
+      const cleanup = setupEventListeners();
+      return cleanup;
     }
-  }, [isConnected, contract, address]);
+  }, [isConnected, contract, address, setupEventListeners]);
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -116,58 +341,6 @@ const Investor = () => {
     }
     checkUserRole();
   }, [contract, address, isConnected, navigate]);
-
-
-
-  const setupEventListeners = () => {
-    if (!contract) return;
-
-    contract.removeAllListeners('SuccessfulTokenPurchase');
-    contract.removeAllListeners('PaymentDistributed');
-
-    console.log('Setting up event listeners for SuccessfulTokenPurchase and PaymentDistributed');
-
-
-    // Listen for successful token purchases
-    contract.on('SuccessfulTokenPurchase', (invoiceId, buyer, amount, event) => {
-      if (buyer.toLowerCase() === address.toLowerCase()) {
-        const amountInEth = parseFloat(ethers.formatEther(amount));
-        setPaymentHistory(prev => [{
-          id: Date.now(),
-          invoice: `#${invoiceId.toString()}`,
-          amount: amountInEth,
-          timestamp: new Date().toLocaleTimeString(),
-          date: new Date().toISOString().split('T')[0],
-          source: 'Token Purchase',
-          status: 'Completed'
-        }, ...prev]);
-
-        // Refresh invoices to update funding status
-        fetchInvoices();
-      }
-    });
-
-    // Listen for payment distributions
-    contract.on('PaymentDistributed', (invoiceId, receiver, amount, event) => {
-      if (receiver.toLowerCase() === address.toLowerCase()) {
-        const amountInEth = parseFloat(ethers.utils.formatEther(amount));
-        setPaymentHistory(prev => [{
-          id: Date.now(),
-          invoice: `#${invoiceId.toString()}`,
-          amount: amountInEth,
-          timestamp: new Date().toLocaleTimeString(),
-          date: new Date().toISOString().split('T')[0],
-          source: 'Chainlink Automation',
-          status: 'Completed'
-        }, ...prev]);
-      }
-    });
-
-    return () => {
-      contract.removeAllListeners('SuccessfulTokenPurchase');
-      contract.removeAllListeners('PaymentDistributed');
-    };
-  };
 
   const filteredInvoices = useMemo(() => {
     if (filterStatus === 'all') return availableInvoices;
@@ -269,22 +442,23 @@ const Investor = () => {
     try {
       setLoading(true);
 
-      // Convert investment amount to wei
-      // const amountInWei = ethers.utils.parseEther(investmentAmount);
-
       const priceOfOneTokenInEth = tokenData[selectedInvoice.id]?.priceOfOneTokenInEth || 0;
       if (priceOfOneTokenInEth <= 0) {
         alert('Price of one token is not available or invalid.');
         setLoading(false);
         return;
       }
+
       console.log('Price of one token in ETH:', priceOfOneTokenInEth);
       console.log('Investment amount:', investmentAmount);
+
       const totalValue = priceOfOneTokenInEth * investmentAmount;
       const totalValueInWei = ethers.parseEther(totalValue.toString());
       const investmentAmountInWei = ethers.parseEther(investmentAmount.toString());
+
       console.log(`Investment amount in wei: ${investmentAmountInWei}`);
       console.log(`Total value in wei: ${totalValueInWei}`);
+
       const maxSupply = tokenData[selectedInvoice.id]?.maxSupply || 0;
       console.log(`Max supply for invoice ${selectedInvoice.id}: ${maxSupply}`);
 
@@ -292,20 +466,26 @@ const Investor = () => {
       const tx = await contract.buyTokens(selectedInvoice.id, investmentAmountInWei, {
         value: totalValueInWei
       });
-      console.log(`Transaction sent: ${tx.hash}`);
-      await tx.wait();
 
-      alert(`Investment of ${investmentAmount} ETH processed successfully!\n\nChainlink Automation will handle payment distribution when the invoice is paid.`);
+      console.log(`Transaction sent: ${tx.hash}`);
+
+      // Wait for transaction confirmation
+      const receipt = await tx.wait();
+      console.log('Transaction confirmed:', receipt);
+
+      alert(`Investment of ${investmentAmount} tokens processed successfully!\n\nTransaction Hash: ${tx.hash}\n\nChainlink Automation will handle payment distribution when the invoice is paid.`);
 
       setSelectedInvoice(null);
       setInvestmentAmount('');
 
       // Refresh invoices to show updated funding status
-      fetchInvoices();
+      setTimeout(() => {
+        fetchInvoices();
+      }, 2000);
 
     } catch (error) {
       console.error('Investment failed:', error);
-      alert('Investment failed. Please try again.');
+      alert(`Investment failed: ${error.message || 'Please try again.'}`);
     } finally {
       setLoading(false);
     }
@@ -324,7 +504,6 @@ const Investor = () => {
 
       console.log(`Token data for invoice ${invoiceId}:`);
       console.log('Max Supply:', maxSupply);
-
 
       setTokenData(prev => ({
         ...prev,
@@ -348,7 +527,6 @@ const Investor = () => {
       }));
     }
   };
-
 
   useEffect(() => {
     if (selectedInvoice && selectedInvoice.status === 'ReadyForFunding') {
@@ -376,6 +554,92 @@ const Investor = () => {
         {status}
       </span>
     );
+  };
+
+  // Enhanced refresh function for initial load or manual refresh
+  const refreshPaymentHistory = async () => {
+    if (!contract || !address || !provider) {
+      console.log('Missing dependencies for refresh:', { contract: !!contract, address: !!address, provider: !!provider });
+      alert('Wallet connection required. Please ensure your wallet is connected.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Get current block number
+      const currentBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, currentBlock - 50000); // Last 50000 blocks (roughly 1 week)
+
+      console.log(`Refreshing payment history from block ${fromBlock} to ${currentBlock}`);
+
+      // Query past events for this user
+      const tokenPurchaseFilter = contract.filters.SuccessfulTokenPurchase(null, address);
+      const paymentDistributedFilter = contract.filters.PaymentDistributed(null, address);
+
+      const [tokenPurchases, paymentDistributions] = await Promise.all([
+        contract.queryFilter(tokenPurchaseFilter, fromBlock),
+        contract.queryFilter(paymentDistributedFilter, fromBlock)
+      ]);
+
+      console.log(`Found ${tokenPurchases.length} token purchases and ${paymentDistributions.length} payment distributions`);
+
+      // Clear existing payment history before adding refreshed data
+      setPaymentHistory([]);
+
+      // Process token purchase events
+      tokenPurchases.forEach(event => {
+        const [invoiceId, buyer, amount] = event.args;
+        if (buyer.toLowerCase() === address.toLowerCase()) {
+          const amountInEth = parseFloat(ethers.formatEther(amount));
+          const newPayment = {
+            id: `${event.transactionHash}-${event.logIndex}`,
+            invoice: `#${invoiceId.toString()}`,
+            amount: amountInEth,
+            timestamp: new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split('T')[0],
+            source: 'Token Purchase',
+            status: 'Completed',
+            txHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            fromRefresh: true
+          };
+          addToPaymentHistory(newPayment);
+        }
+      });
+
+      // Process payment distribution events
+      paymentDistributions.forEach(event => {
+        const [invoiceId, receiver, amount] = event.args;
+        if (receiver.toLowerCase() === address.toLowerCase()) {
+          const amountInEth = parseFloat(ethers.formatEther(amount));
+          const newPayment = {
+            id: `${event.transactionHash}-${event.logIndex}`,
+            invoice: `#${invoiceId.toString()}`,
+            amount: amountInEth,
+            timestamp: new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split('T')[0],
+            source: 'Chainlink Automation',
+            status: 'Completed and Payment Distributed by Chainlink',
+            txHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            fromRefresh: true
+          };
+          addToPaymentHistory(newPayment);
+        }
+      });
+
+      // Update last polled block to current block
+      setLastPolledBlock(currentBlock);
+
+      alert(`Payment history refreshed! Found ${tokenPurchases.length + paymentDistributions.length} total events.`);
+
+    } catch (error) {
+      console.error('Error refreshing payment history:', error);
+      alert('Error refreshing payment history. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
 
@@ -421,7 +685,8 @@ const Investor = () => {
           </div>
 
           {/* Center - View Payments Button */}
-          <div className="flex items-center justify-center">
+          {/* Enhanced View Payments Button */}
+          <div className="flex items-center justify-center space-x-4">
             <button
               onClick={() => setShowPayments(true)}
               className="flex items-center space-x-2 bg-green-500/20 border border-green-500/30 rounded-full px-4 py-2 hover:bg-green-500/30 transition-all duration-300 group cursor-pointer"
@@ -430,6 +695,16 @@ const Investor = () => {
               <span className="text-green-300 text-sm font-bold">View Payments</span>
               <span className="text-green-200 text-xs bg-green-500/30 px-2 py-1 rounded-full cursor-pointer">
                 {paymentHistory.length}
+              </span>
+            </button>
+
+            <button
+              onClick={refreshPaymentHistory}
+              disabled={loading}
+              className="flex items-center space-x-2 bg-blue-500/20 border border-blue-500/30 rounded-full px-4 py-2 hover:bg-blue-500/30 transition-all duration-300 group cursor-pointer disabled:opacity-50"
+            >
+              <span className="text-blue-300 text-sm font-bold">
+                {loading ? 'Refreshing...' : 'Refresh History'}
               </span>
             </button>
           </div>
@@ -446,6 +721,42 @@ const Investor = () => {
           </div>
         </nav>
       </header>
+
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Clean Gradient Backdrop */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/5 via-purple-700/5 to-cyan-600/50 backdrop-blur-md animate-in fade-in duration-300"></div>
+          <div className="absolute inset-0 bg-black/70"></div>
+
+          {/* Loading Content */}
+          <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+            {/* Subtle Background Pattern */}
+            <div className="absolute inset-0 w-96 h-96 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2">
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] opacity-20"></div>
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-80 w-80 rounded-full bg-gradient-to-r from-purple-900/10 via-purple-700/10 to-cyan-600/20 blur-3xl"></div>
+            </div>
+
+            {/* Clean Spinner */}
+            <div className="relative mb-8">
+              <div className="w-12 h-12 rounded-full border-2 border-gray-700/30 border-t-transparent bg-gradient-to-r from-purple-900/20 via-purple-700/20 to-cyan-600/40 animate-spin"></div>
+              <div className="absolute inset-1 w-10 h-10 rounded-full border-2 border-transparent border-t-white/80 animate-spin" style={{ animationDuration: '1.5s' }}></div>
+            </div>
+
+            {/* Professional Text */}
+            <div className="text-center">
+              <h2 className="text-xl font-medium text-white mb-2">
+                Loading
+              </h2>
+              <p className="text-gray-400 text-sm">Please wait a moment...</p>
+            </div>
+
+            {/* Minimal Progress Indicator */}
+            <div className="mt-6 w-32 h-1 bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-purple-900/50 via-purple-700/50 to-cyan-600/80 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-8 py-12">
