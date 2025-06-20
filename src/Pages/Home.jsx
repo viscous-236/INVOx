@@ -8,6 +8,7 @@ import { getReadOnlyContract } from '../contract/Main';
 const Home = () => {
   const [activeRole, setActiveRole] = useState(null);
   const [scrollY, setScrollY] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const navigate = useNavigate();
 
@@ -37,23 +38,23 @@ const Home = () => {
 
     try {
       const hasChosenRole = await contract.hasChosenRole(address);
-      console.log("Has chosen role:", hasChosenRole);
 
       if (!hasChosenRole) {
+        setLoading(true);
         const roleMapping = {
           'supplier': 0,
           'buyer': 1,
           'investor': 2
         };
 
-        await contract.chooseRole(roleMapping[role]);
-        console.log(`Role chosen: ${role}`);
+        const tx = await contract.chooseRole(roleMapping[role]);
+        await tx.wait();
+
+
         setActiveRole(role);
-        alert(`You have chosen the role: ${role.charAt(0).toUpperCase() + role.slice(1)}`);
-        navigate(`/${role}`);
+        alert(`You have chosen the role: ${role.charAt(0).toUpperCase() + role.slice(1)}, please go to the ${role} page.`);
       } else {
         const userRoleIndex = await contract.getUserRole(address);
-        console.log("User role index from contract:", userRoleIndex);
 
         const roleIndexMapping = {
           0: 'supplier',
@@ -62,7 +63,6 @@ const Home = () => {
         };
 
         const existingRole = roleIndexMapping[parseInt(userRoleIndex)];
-        console.log("Existing role:", existingRole);
 
         if (existingRole === role) {
           setActiveRole(role);
@@ -70,12 +70,13 @@ const Home = () => {
         } else {
           alert(`You have already chosen the role: ${existingRole.charAt(0).toUpperCase() + existingRole.slice(1)}. You cannot change your role.`);
           setActiveRole(existingRole);
-          navigate(`/${existingRole}`);
         }
       }
     } catch (error) {
       console.error("Error in role selection:", error);
       alert("Failed to process role selection. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,6 +95,42 @@ const Home = () => {
           top: mousePosition.y - 192,
         }}
       />
+
+        {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Clean Gradient Backdrop */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/5 via-purple-700/5 to-cyan-600/50 backdrop-blur-md animate-in fade-in duration-300"></div>
+          <div className="absolute inset-0 bg-black/70"></div>
+
+          {/* Loading Content */}
+          <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+            {/* Subtle Background Pattern */}
+            <div className="absolute inset-0 w-96 h-96 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2">
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] opacity-20"></div>
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-80 w-80 rounded-full bg-gradient-to-r from-purple-900/10 via-purple-700/10 to-cyan-600/20 blur-3xl"></div>
+            </div>
+
+            {/* Clean Spinner */}
+            <div className="relative mb-8">
+              <div className="w-12 h-12 rounded-full border-2 border-gray-700/30 border-t-transparent bg-gradient-to-r from-purple-900/20 via-purple-700/20 to-cyan-600/40 animate-spin"></div>
+              <div className="absolute inset-1 w-10 h-10 rounded-full border-2 border-transparent border-t-white/80 animate-spin" style={{ animationDuration: '1.5s' }}></div>
+            </div>
+
+            {/* Professional Text */}
+            <div className="text-center">
+              <h2 className="text-xl font-medium text-white mb-2">
+                Loading
+              </h2>
+              <p className="text-gray-400 text-sm">Please wait a moment...</p>
+            </div>
+
+            {/* Minimal Progress Indicator */}
+            <div className="mt-6 w-32 h-1 bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-purple-900/50 via-purple-700/50 to-cyan-600/80 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className="relative z-20">

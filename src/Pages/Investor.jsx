@@ -21,7 +21,7 @@ const Investor = () => {
   const { address, contract, isConnected, provider } = useWallet();
 
 
-  // Convert contract status to display status
+
   const getDisplayStatus = (contractStatus) => {
     switch (contractStatus) {
       case 0: return 'VerificationPending';
@@ -33,21 +33,20 @@ const Investor = () => {
     }
   };
 
-  // Enhanced addToPaymentHistory with better duplicate detection
   const addToPaymentHistory = useCallback((newPayment) => {
     setPaymentHistory(prev => {
-      // Check for duplicates using multiple criteria
+
       const exists = prev.some(payment => {
-        // Check by unique ID (transaction hash + log index for polling)
+
         if (payment.id === newPayment.id) return true;
 
-        // Check by transaction hash (for manual entries)
+
         if (payment.txHash && newPayment.txHash && payment.txHash === newPayment.txHash) return true;
 
-        // Check by invoice, amount, and approximate time (for events without tx hash)
+
         if (payment.invoice === newPayment.invoice &&
           Math.abs(payment.amount - newPayment.amount) < 0.0001 &&
-          Math.abs(new Date(payment.date).getTime() - new Date(newPayment.date).getTime()) < 300000) { // Within 5 minutes
+          Math.abs(new Date(payment.date).getTime() - new Date(newPayment.date).getTime()) < 300000) { 
           return true;
         }
 
@@ -64,7 +63,7 @@ const Investor = () => {
     });
   }, []);
 
-  // Enhanced polling mechanism for events
+
   const pollForEvents = useCallback(async () => {
     if (!contract || !address || !provider) return;
 
@@ -105,28 +104,6 @@ const Investor = () => {
         }
       });
 
-      // Process payment distributed events
-      paymentDistributedEvents.forEach(event => {
-        const [invoiceId, receiver, amount] = event.args;
-        if (receiver.toLowerCase() === address.toLowerCase()) {
-          const amountInEth = parseFloat(ethers.formatEther(amount));
-          const newPayment = {
-            id: `${event.transactionHash}-${event.logIndex}`, // Unique ID based on tx hash and log index
-            invoice: `#${invoiceId.toString()}`,
-            amount: amountInEth,
-            timestamp: new Date().toLocaleTimeString(),
-            date: new Date().toISOString().split('T')[0],
-            source: 'Chainlink Automation',
-            status: 'Completed and Payment Distributed by Chainlink',
-            txHash: event.transactionHash,
-            blockNumber: event.blockNumber,
-            fromPolling: true
-          };
-
-          console.log('Found payment distributed event via polling:', newPayment);
-          addToPaymentHistory(newPayment);
-        }
-      });
 
       // Update last polled block
       setLastPolledBlock(currentBlock);
@@ -136,15 +113,15 @@ const Investor = () => {
     }
   }, [contract, address, provider, lastPolledBlock, addToPaymentHistory]);
 
-  // Start/stop polling based on connection status
+
   useEffect(() => {
     if (isConnected && contract && address) {
       console.log('Starting event polling...');
 
-      // Initial poll
+
       pollForEvents();
 
-      // Set up regular polling every 30 seconds
+
       const interval = setInterval(pollForEvents, 30000);
       setPollingInterval(interval);
 
@@ -182,8 +159,6 @@ const Investor = () => {
 
   const fetchInvoices = async () => {
     try {
-
-
       const getAllInvoiceIds = await contract.getAllInvoiceIds();
 
       const invoicePromises = getAllInvoiceIds.map(async (id) => {
@@ -263,41 +238,14 @@ const Investor = () => {
       }
     };
 
-    const handlePaymentDistributed = (invoiceId, receiver, amount, event) => {
-      try {
-        console.log('PaymentDistributed event received:', { invoiceId, receiver, amount });
-
-        if (receiver.toLowerCase() === address.toLowerCase()) {
-          const amountInEth = parseFloat(ethers.formatEther(amount));
-          const newPayment = {
-            id: `${event.transactionHash}-${event.logIndex}`, // Use tx hash + log index for unique ID
-            invoice: `#${invoiceId.toString()}`,
-            amount: amountInEth,
-            timestamp: new Date().toLocaleTimeString(),
-            date: new Date().toISOString().split('T')[0],
-            source: 'Chainlink Automation',
-            status: 'Completed',
-            txHash: event?.transactionHash || '',
-            blockNumber: event?.blockNumber || 0,
-            fromListener: true
-          };
-
-          addToPaymentHistory(newPayment);
-        }
-      } catch (error) {
-        console.error('Error handling PaymentDistributed event:', error);
-      }
-    };
-
+    
     // Set up event listeners with error handling
     contract.on('SuccessfulTokenPurchase', handleTokenPurchase);
-    contract.on('PaymentDistributed', handlePaymentDistributed);
 
     // Handle provider connection issues
     if (provider) {
       provider.on('disconnect', () => {
         contract.removeAllListeners('SuccessfulTokenPurchase');
-        contract.removeAllListeners('PaymentDistributed');
       });
 
       provider.on('connect', () => {
@@ -311,7 +259,6 @@ const Investor = () => {
 
     return () => {
       contract.removeAllListeners('SuccessfulTokenPurchase');
-      contract.removeAllListeners('PaymentDistributed');
     };
   }, [contract, address, provider, addToPaymentHistory]);
 
@@ -383,6 +330,7 @@ const Investor = () => {
   const getButtonConfig = (invoice) => {
     const status = invoice.status;
 
+
     switch (status) {
       case 'ReadyForFunding':
         return {
@@ -453,8 +401,8 @@ const Investor = () => {
       console.log('Investment amount:', investmentAmount);
 
       const totalValue = priceOfOneTokenInEth * investmentAmount;
-      const totalValueInWei = ethers.parseEther(totalValue.toString());
-      const investmentAmountInWei = ethers.parseEther(investmentAmount.toString());
+      const totalValueInWei = ethers.parseUnits(totalValue.toFixed(18), 'ether');
+      const investmentAmountInWei = ethers.parseEther(investmentAmount.toString()); // Use parseEther for decimal token units
 
       console.log(`Investment amount in wei: ${investmentAmountInWei}`);
       console.log(`Total value in wei: ${totalValueInWei}`);
@@ -575,14 +523,12 @@ const Investor = () => {
 
       // Query past events for this user
       const tokenPurchaseFilter = contract.filters.SuccessfulTokenPurchase(null, address);
-      const paymentDistributedFilter = contract.filters.PaymentDistributed(null, address);
 
-      const [tokenPurchases, paymentDistributions] = await Promise.all([
-        contract.queryFilter(tokenPurchaseFilter, fromBlock),
-        contract.queryFilter(paymentDistributedFilter, fromBlock)
+      const [tokenPurchases] = await Promise.all([
+        contract.queryFilter(tokenPurchaseFilter, fromBlock)
       ]);
 
-      console.log(`Found ${tokenPurchases.length} token purchases and ${paymentDistributions.length} payment distributions`);
+      console.log(`Found ${tokenPurchases.length} token purchases`);
 
       // Clear existing payment history before adding refreshed data
       setPaymentHistory([]);
@@ -600,27 +546,6 @@ const Investor = () => {
             date: new Date().toISOString().split('T')[0],
             source: 'Token Purchase',
             status: 'Completed',
-            txHash: event.transactionHash,
-            blockNumber: event.blockNumber,
-            fromRefresh: true
-          };
-          addToPaymentHistory(newPayment);
-        }
-      });
-
-      // Process payment distribution events
-      paymentDistributions.forEach(event => {
-        const [invoiceId, receiver, amount] = event.args;
-        if (receiver.toLowerCase() === address.toLowerCase()) {
-          const amountInEth = parseFloat(ethers.formatEther(amount));
-          const newPayment = {
-            id: `${event.transactionHash}-${event.logIndex}`,
-            invoice: `#${invoiceId.toString()}`,
-            amount: amountInEth,
-            timestamp: new Date().toLocaleTimeString(),
-            date: new Date().toISOString().split('T')[0],
-            source: 'Chainlink Automation',
-            status: 'Completed and Payment Distributed by Chainlink',
             txHash: event.transactionHash,
             blockNumber: event.blockNumber,
             fromRefresh: true
@@ -880,6 +805,13 @@ const Investor = () => {
             const maxSupply = ethers.formatEther(invoice.maxSupply || 0);
             const fundedAmount = ethers.formatEther(invoice.fundedAmount || 0);
 
+            if (fundedAmount == maxSupply && displayStatus === 'ReadyForFunding') {
+              buttonConfig.text = '✅ Fully Funded';
+              buttonConfig.className = 'w-full bg-green-600/20 text-green-400 border border-green-500/30 py-3 rounded-xl font-bold text-sm cursor-not-allowed opacity-70';
+              buttonConfig.disabled = true;
+              buttonConfig.showShimmer = false;
+            }
+
             return (
               <div
                 key={invoice.id}
@@ -987,7 +919,7 @@ const Investor = () => {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
                 <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-                <h3 className="text-2xl font-black text-white">Payment History</h3>
+                <h3 className="text-2xl font-black text-white">Investment History</h3>
                 <span className="bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-sm font-bold">
                   {paymentHistory.length} Payments
                 </span>
@@ -1006,7 +938,7 @@ const Investor = () => {
                 <span className="text-orange-300 text-sm font-bold">CHAINLINK AUTOMATION</span>
               </div>
               <p className="text-gray-300 text-sm">
-                All payments are automatically processed and distributed via Chainlink Automation when invoices are paid by buyers.
+                All the investments will automatically processed and distributed via Chainlink Automation when invoices are paid by buyers.
               </p>
             </div>
 
@@ -1048,7 +980,7 @@ const Investor = () => {
             <div className="mt-6 pt-4 border-t border-gray-700/50">
               <div className="flex justify-between items-center">
                 <div className="text-gray-400 text-sm">
-                  Total received from {paymentHistory.length} payments
+                  Total Amount Invested
                 </div>
                 <div className="text-2xl font-black text-white">
                   ${paymentHistory.reduce((sum, payment) => sum + payment.amount, 0).toLocaleString()}
@@ -1084,11 +1016,15 @@ const Investor = () => {
               </div>
               <div className="flex justify-between p-3 bg-white/5 rounded-lg">
                 <span className="text-gray-400 font-medium">Amount</span>
-                <span className="text-white font-bold">${selectedInvoice.amount.toLocaleString()}</span>
+                <span className="text-white font-bold">${ethers.formatEther(selectedInvoice.amount.toString())}</span>
               </div>
               <div className="flex justify-between p-3 bg-white/5 rounded-lg">
                 <span className="text-gray-400 font-medium">Days to Payment</span>
-                <span className="text-white font-bold">{selectedInvoice.daysToPayment} days</span>
+                <span className="text-white font-bold">{selectedInvoice.daysToPayment}</span>
+              </div>
+              <div className="flex justify-between p-3 bg-white/5 rounded-lg">
+                <span className="text-gray-400 font-medium">Max Tokens Available To Buy</span>
+                <span className="text-white font-bold">{ethers.formatEther(selectedInvoice.maxSupply) - ethers.formatEther(selectedInvoice.fundedAmount)}</span>
               </div>
               {selectedInvoice.status === 'ReadyForFunding' && (
                 <>
@@ -1098,7 +1034,7 @@ const Investor = () => {
                   </div>
                   <div className="flex justify-between p-3 bg-white/5 rounded-lg">
                     <span className="text-gray-400 font-medium">Price of One Token</span>
-                    <span className="text-white font-bold">{tokenData[selectedInvoice.id]?.priceOfOneTokenInEth || "Loading..."}ETH</span>
+                    <span className="text-white font-bold">{tokenData[selectedInvoice.id]?.priceOfOneTokenInEth || "Loading..."} ETH</span>
                   </div>
                 </>
               )}
