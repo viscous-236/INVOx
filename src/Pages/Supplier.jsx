@@ -64,7 +64,7 @@ const UnifiedSupplierDashboard = () => {
           const roleInNum = Number(role);
 
           if (roleInNum !== 0) {
-            alert('You do not have permission to access this dashboard. Please switch to the Supplier role.');
+            alert('You do not have permission to access this dashboard. Only Suppliers can access this page.');
             navigate('/');
             return;
           }

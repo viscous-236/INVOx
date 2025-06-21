@@ -46,7 +46,7 @@ const Investor = () => {
 
         if (payment.invoice === newPayment.invoice &&
           Math.abs(payment.amount - newPayment.amount) < 0.0001 &&
-          Math.abs(new Date(payment.date).getTime() - new Date(newPayment.date).getTime()) < 300000) { 
+          Math.abs(new Date(payment.date).getTime() - new Date(newPayment.date).getTime()) < 300000) {
           return true;
         }
 
@@ -238,7 +238,7 @@ const Investor = () => {
       }
     };
 
-    
+
     // Set up event listeners with error handling
     contract.on('SuccessfulTokenPurchase', handleTokenPurchase);
 
@@ -276,7 +276,7 @@ const Investor = () => {
         const role = await contract.getUserRole(address);
         const roleInNum = Number(role);
         if (roleInNum !== 2) {
-          alert('You do not have permission to access this dashboard. Please switch to the Investor role.');
+          alert('You do not have permission to access this dashboard. Only investors can view this page.');
           navigate('/');
         } else {
           await fetchInvoices();
@@ -557,7 +557,7 @@ const Investor = () => {
       // Update last polled block to current block
       setLastPolledBlock(currentBlock);
 
-      alert(`Payment history refreshed! Found ${tokenPurchases.length + paymentDistributions.length} total events.`);
+      alert(`Payment history refreshed! Found ${tokenPurchases.length} total events.`);
 
     } catch (error) {
       console.error('Error refreshing payment history:', error);
