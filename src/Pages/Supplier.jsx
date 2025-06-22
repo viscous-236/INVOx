@@ -589,7 +589,7 @@ const UnifiedSupplierDashboard = () => {
 
   // Update the modal to fetch data when selectedInvoice changes
   useEffect(() => {
-    if (selectedInvoice && selectedInvoice.status === 'Approved') {
+    if (selectedInvoice && (selectedInvoice.status === 'Approved' || selectedInvoice.status === 'Paid')) {
       fetchTokenData(selectedInvoice.id);
     }
   }, [selectedInvoice, contract]);
@@ -675,15 +675,15 @@ const UnifiedSupplierDashboard = () => {
           }}
         >
           <div className="flex items-center space-x-4 group">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-purple-600 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30 group-hover:shadow-purple-500/50 transition-all duration-300">
-                <span className="text-white font-black text-xl">IF</span>
+            {/* Logo */}
+            <button onClick={() => navigate('/')} className='hover: cursor-pointer'>
+              <div className="flex items-center space-x-1">
+                <img src="/logo2.jpeg" alt="Logo" className="w-20 h-18" />
+                <div className="bg-gradient-to-r text-4xl font-black from-white via-purple-200 to-white bg-clip-text text-transparent mb-2">
+                  INVOx
+                </div>
               </div>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-ping opacity-75" />
-            </div>
-            <div className="text-2xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent tracking-tight">
-              InvoiceFinance
-            </div>
+            </button>
             <div className="hidden lg:block px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-xs text-blue-300 font-medium">
               SUPPLIER
             </div>
@@ -1095,7 +1095,7 @@ const UnifiedSupplierDashboard = () => {
                   <span className="text-white font-bold">${selectedInvoice.amount.toLocaleString()}</span>
                 </div>
 
-                {selectedInvoice.status === 'Approved' && (
+                {(selectedInvoice.status === 'Approved' || selectedInvoice.status === 'Paid') && (
                   <>
                     <div className="flex justify-between p-2 bg-white/5 rounded-lg">
                       <span className="text-gray-400 text-sm font-medium">Token Address</span>

@@ -81,8 +81,8 @@ const Home = () => {
     }
   };
 
-  
-   
+
+
   return (
     <div className="min-h-screen relative overflow-hidden bg-black">
       {/* New Background Pattern */}
@@ -99,7 +99,7 @@ const Home = () => {
         }}
       />
 
-        {loading && (
+      {loading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           {/* Clean Gradient Backdrop */}
           <div className="absolute inset-0 bg-gradient-to-br from-purple-900/5 via-purple-700/5 to-cyan-600/50 backdrop-blur-md animate-in fade-in duration-300"></div>
@@ -134,7 +134,6 @@ const Home = () => {
           </div>
         </div>
       )}
-
       {/* Header */}
       <header className="relative z-20">
         <nav
@@ -145,35 +144,27 @@ const Home = () => {
           }}
         >
           {/* Logo */}
-          <div className="flex items-center space-x-4 group">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-purple-600 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30 group-hover:shadow-purple-500/50 transition-all duration-300">
-                <span className="text-white font-black text-xl">IF</span>
-              </div>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-ping opacity-75" />
-            </div>
-            <div className="text-2xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent tracking-tight cursor-pointer ">
-              InvoiceFinance
-            </div>
-            <div className="hidden lg:block px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs text-purple-300 font-medium">
-              BETA
+          <div className="flex items-center space-x-1">
+            <img src="/logo2.jpeg" alt="Logo" className="w-20 h-18" />
+            <div className="bg-gradient-to-r text-4xl font-black from-white via-purple-200 to-white bg-clip-text text-transparent mb-2">
+              INVOx
             </div>
           </div>
-{/* Network Status */}
-<div className="hidden xl:flex items-center space-x-8">
-  <div className="flex items-center space-x-2">
-    <span className="text-xl">⚡</span>
-    <span className="text-gray-300 text-base font-bold">Fast Settlement</span>
-  </div>
-  <div className="flex items-center space-x-2">
-    <span className="text-xl">💸</span>
-    <span className="text-gray-300 text-base font-bold">Automated Payouts</span>
-  </div>
-  <div className="flex items-center space-x-2">
-    <span className="text-xl">🌐</span>
-    <span className="text-gray-300 text-base font-bold">Global Access</span>
-  </div>
-</div>
+          {/* Network Status */}
+          <div className="hidden xl:flex items-center space-x-8">
+            <div className="flex items-center space-x-2">
+              <span className="text-xl">⚡</span>
+              <span className="text-gray-300 text-base font-bold">Fast Settlement</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xl">💸</span>
+              <span className="text-gray-300 text-base font-bold">Automated Payouts</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xl">🌐</span>
+              <span className="text-gray-300 text-base font-bold">Global Access</span>
+            </div>
+          </div>
           {/* Action buttons */}
           <div className="flex items-center space-x-4">
             <button
@@ -219,15 +210,14 @@ const Home = () => {
                   Next-Generation Decentralized Invoice Financing
                 </p>
                 <p className="text-lg text-gray-400 leading-relaxed max-w-3xl mx-auto">
-                  Unlock instant liquidity from your invoices with AI-powered verification,
-                  institutional-grade security, and automated smart contract execution
+                  Unlock instant liquidity from your invoices with ERP-powered verification, and automated payment settlements.
                 </p>
               </div>
             </div>
 
             {/* CTA Section */}
             <div className="flex flex-col lg:flex-row gap-6 justify-center items-center mb-16">
-              <button className="relative group bg-gradient-to-r from-black via-purple-900/45 to-cyan-600/30 text-white px-12 py-4 rounded-xl hover:from-black hover:via-black hover:to-black transition-all duration-300 transform hover:scale-105 shadow-xl shadow-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/70 font-bold text-lg overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60">
+              <button className="relative group bg-gradient-to-r from-black via-purple-900/45 to-cyan-600/30 text-white px-12 py-4 rounded-xl hover:from-black hover:via-black hover:to-black transition-all duration-300 transform hover:scale-105 shadow-xl shadow-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/70 font-bold text-lg overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60" onClick={() => document.getElementById('choose-role').scrollIntoView({ behavior: 'smooth' })}>
                 <span className="relative z-10 flex items-center space-x-2">
                   <span>🚀 Start Investing Now</span>
                   <div className="w-2 h-2 bg-cyan-300 rounded-full animate-pulse group-hover:animate-ping" />
@@ -237,8 +227,10 @@ const Home = () => {
                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/50 via-black-600 to-cyan-800/5 rounded-xl blur opacity-0 group-hover:opacity-30 transition-all duration-500 -z-10" />
               </button>
 
-              <button className="group bg-gray-800/60 backdrop-blur-xl border border-gray-600/50 text-white px-12 py-4 rounded-xl hover:bg-gray-700/60 hover:border-gray-500/60 transition-all duration-300 font-bold text-lg flex items-center space-x-3 cursor-pointer hover:shadow-lg hover:shadow-gray-500/20 relative overflow-hidden">
-                <span>🔍 Join Platform</span>
+              <button
+                onClick={() => document.getElementById('how-it-works').scrollIntoView({ behavior: 'smooth' })}
+                className="group bg-gray-800/30 backdrop-blur-xl border border-gray-600/50 text-white px-12 py-4 rounded-xl hover:bg-gray-700/60 hover:border-gray-500/60 transition-all duration-300 font-bold text-lg flex items-center space-x-3 cursor-pointer hover:shadow-lg hover:shadow-gray-500/20 relative overflow-hidden">
+                <span>🔍 Explore</span>
                 <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-all duration-300 group-hover:scale-110">
                   <span className="text-xs">→</span>
                 </div>
@@ -246,8 +238,8 @@ const Home = () => {
               </button>
             </div>
 
-            
-           
+
+
           </div>
         </section>
 
@@ -266,11 +258,11 @@ const Home = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-  <div className="text-gray-400 font-medium mb-2">Platform Growth</div>
-  <div className="text-green-400 font-black text-3xl">+60%</div>
-  <div className="text-green-400">Past 30 Days</div>
-</div>
+                <div className="text-center">
+                  <div className="text-gray-400 font-medium mb-2">Platform Growth</div>
+                  <div className="text-green-400 font-black text-3xl">+60%</div>
+                  <div className="text-green-400">Past 30 Days</div>
+                </div>
 
 
 
@@ -290,7 +282,7 @@ const Home = () => {
         </section>
 
         {/* Role Selection */}
-        <section className="px-8 py-20">
+        <section className="px-8 py-20" id='choose-role'>
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
@@ -311,10 +303,10 @@ const Home = () => {
                   features: [
                     "Instant liquidity access",
                     "Real-time ERP integration",
-                    "Automated smart contracts",
-                    "Multi-currency support"
+                    "Secure verification",
+                    "Smooth tokenization",
                   ],
-                  gradient: "from-blue-600/30 to-cyan-600/30",
+                  gradient: "from-blue-700/20 to-black-100/5",
                   border: "border-blue-500/40",
                   hoverBorder: "hover:border-blue-400/70",
                   role: "supplier",
@@ -328,11 +320,11 @@ const Home = () => {
                   description: "Manage invoice payments with advanced automation and tracking",
                   features: [
                     "Payment automation",
-                    "Transaction tracking",
-                    "Dispute resolution",
-                    "Analytics dashboard"
+                    "Penalty tracking",
+                    "Instant settlement",
+                    "Risk management"
                   ],
-                  gradient: "from-emerald-600/30 to-green-600/30",
+                  gradient: "from-green-700/20 to-black-100/5",
                   border: "border-emerald-500/40",
                   hoverBorder: "hover:border-emerald-400/70",
                   role: "buyer",
@@ -347,10 +339,10 @@ const Home = () => {
                   features: [
                     "High-yield investments",
                     "Portfolio diversification",
-                    "Risk assessment tools",
-                    "Real-time analytics"
+                    "Historical investment tracking",
+                    "Real-time analytics",
                   ],
-                  gradient: "from-purple-600/30 to-pink-600/30",
+                  gradient: "from-purple-700/20 to-black-100/5",
                   border: "border-purple-500/40",
                   hoverBorder: "hover:border-purple-400/70",
                   role: "investor",
@@ -383,7 +375,6 @@ const Home = () => {
                     <div className="space-y-3 mb-8">
                       {role.features.map((feature, idx) => (
                         <div key={idx} className="flex items-center text-gray-300 font-medium">
-                          <div className={`w-2 h-2 bg-${role.accent}-400 rounded-full mr-3 opacity-80`} />
                           <span className="text-sm">{feature}</span>
                         </div>
                       ))}
@@ -407,7 +398,7 @@ const Home = () => {
         </section>
 
         {/* Process Steps */}
-        <section className="px-8 py-20">
+        <section className="px-8 py-20" id='how-it-works'>
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
@@ -426,34 +417,31 @@ const Home = () => {
                   {
                     number: "01",
                     title: "Create & Submit",
-                    description: "Upload invoices with automated ERP integration and AI-powered validation",
-                    icon: "📝",
-                    color: "from-blue-500 to-cyan-500"
+                    description: "Upload invoices anc verify with ERP integration via Chainlink functions",
+                    color: "from-blue-700/40 to-cyan-100/5"
                   },
                   {
                     number: "02",
                     title: "Verify & Tokenize",
                     description: "Smart contracts verify authenticity and convert invoices into tradeable tokens",
-                    icon: "🔍",
-                    color: "from-emerald-500 to-green-500"
+
+                    color: "from-emerald-700/40 to-green-100/5"
                   },
                   {
                     number: "03",
                     title: "Invest",
-                    description: "Investors purchase token shares with real-time pricing and instant settlement",
-                    icon: "📊",
-                    color: "from-purple-500 to-pink-500"
+                    description: "Invest in tokens with real-time pricing of each token using Chainlink data feeds",
+                    color: "from-purple-700/40 to-pink-100/5"
                   },
                   {
                     number: "04",
                     title: "Collect & Distribute",
-                    description: "Automated systems collect payments and distribute returns to all stakeholders",
-                    icon: "💎",
-                    color: "from-orange-500 to-red-500"
+                    description: "Chainlink Automated system distributes payment to all investors and supplier",
+                    color: "from-orange-500/40 to-red-100/5"
                   }
                 ].map((step, index) => (
                   <div key={index} className="relative group">
-                    <div className="bg-gray-800/40 backdrop-blur-2xl border border-gray-700/50 rounded-2xl p-8 hover:bg-gray-700/40 hover:border-gray-600/70 transition-all duration-500 group-hover:transform group-hover:scale-105">
+                    <div className="bg-gray-800/20 backdrop-blur-2xl border border-gray-700/50 rounded-2xl p-8 hover:bg-gray-700/40 hover:border-gray-600/70 transition-all duration-500 group-hover:transform group-hover:scale-105">
                       <div className="text-5xl mb-6 text-center group-hover:scale-110 transition-transform duration-300">
                         {step.icon}
                       </div>
@@ -475,93 +463,93 @@ const Home = () => {
         </section>
       </main>
 
-     <footer className="relative z-10 mt-20 border-t border-gray-700/30 bg-gray-900/60 backdrop-blur-xl">
-      {/* Subtle Background Pattern */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f1a_1px,transparent_1px),linear-gradient(to_bottom,#8080801a_1px,transparent_1px)] bg-[size:24px_24px] opacity-20"></div>
-      
-      <div className="relative max-w-7xl mx-auto px-8 py-12">
-        {/* Main Footer Content */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-          {/* Company */}
-          <div>
-            <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
-            <div className="space-y-3">
-              {['About Us', 'Careers', 'Press', 'Contact'].map((item) => (
-                <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
-                  {item}
-                </a>
-              ))}
-            </div>
-          </div>
+      <footer className="relative z-10 mt-20 border-t border-gray-700/30 bg-gray-900/60 backdrop-blur-xl">
+        {/* Subtle Background Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f1a_1px,transparent_1px),linear-gradient(to_bottom,#8080801a_1px,transparent_1px)] bg-[size:24px_24px] opacity-20"></div>
 
-          {/* Product */}
-          <div>
-            <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Product</h4>
-            <div className="space-y-3">
-              {['Features', 'Security', 'Pricing', 'Updates'].map((item) => (
-                <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
-                  {item}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Resources */}
-          <div>
-            <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
-            <div className="space-y-3">
-              {['Documentation', 'Help Center', 'Community', 'Blog'].map((item) => (
-                <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
-                  {item}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Legal */}
-          <div>
-            <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Legal</h4>
-            <div className="space-y-3">
-              {['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'Compliance'].map((item) => (
-                <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
-                  {item}
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Section */}
-        <div className="pt-8 border-t border-gray-700/30">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="text-gray-400 text-sm mb-4 md:mb-0">
-              © 2025 InvoiceFinance. All rights reserved.
-            </div>
-            
-            <div className="flex items-center space-x-6">
-              {/* Social Icons */}
-              <div className="flex items-center space-x-3">
-                {['💬', '🐦', '📱', '💼'].map((icon, idx) => (
-                  <a 
-                    key={idx} 
-                    href="#"
-                    className="w-9 h-9 bg-gray-800/50 hover:bg-gray-700/70 border border-gray-700/50 hover:border-gray-600/50 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-105 group"
-                  >
-                    <span className="text-sm group-hover:scale-110 transition-transform duration-200">{icon}</span>
+        <div className="relative max-w-7xl mx-auto px-8 py-12">
+          {/* Main Footer Content */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            {/* Company */}
+            <div>
+              <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
+              <div className="space-y-3">
+                {['About Us', 'Careers', 'Press', 'Contact'].map((item) => (
+                  <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
+                    {item}
                   </a>
                 ))}
               </div>
-              
-              {/* Status */}
-              <div className="flex items-center space-x-2 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-500/20">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-green-400 text-xs font-medium">Live</span>
+            </div>
+
+            {/* Product */}
+            <div>
+              <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Product</h4>
+              <div className="space-y-3">
+                {['Features', 'Security', 'Pricing', 'Updates'].map((item) => (
+                  <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
+                    {item}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Resources */}
+            <div>
+              <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
+              <div className="space-y-3">
+                {['Documentation', 'Help Center', 'Community', 'Blog'].map((item) => (
+                  <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
+                    {item}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Legal</h4>
+              <div className="space-y-3">
+                {['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'Compliance'].map((item) => (
+                  <a key={item} href="#" className="block text-gray-400 text-sm hover:text-white transition-colors duration-200">
+                    {item}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Section */}
+          <div className="pt-8 border-t border-gray-700/30">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <div className="text-gray-400 text-sm mb-4 md:mb-0">
+                © 2025 InvoiceFinance. All rights reserved.
+              </div>
+
+              <div className="flex items-center space-x-6">
+                {/* Social Icons */}
+                <div className="flex items-center space-x-3">
+                  {['💬', '🐦', '📱', '💼'].map((icon, idx) => (
+                    <a
+                      key={idx}
+                      href="#"
+                      className="w-9 h-9 bg-gray-800/50 hover:bg-gray-700/70 border border-gray-700/50 hover:border-gray-600/50 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-105 group"
+                    >
+                      <span className="text-sm group-hover:scale-110 transition-transform duration-200">{icon}</span>
+                    </a>
+                  ))}
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center space-x-2 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-500/20">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-green-400 text-xs font-medium">Live</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </footer>
+      </footer>
     </div>
   );
 };
