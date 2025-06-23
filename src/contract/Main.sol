@@ -416,7 +416,7 @@ contract Main is FunctionsClient, ReentrancyGuard, AutomationCompatibleInterface
             _sendPayment(invoice.supplier, totalPaymentInEth);
             emit PaymentToSupplier(invoiceId, invoice.supplier, totalPaymentInEth);
         } else {
-            uint256 totalInvestment = invoice.totalInvestment;
+            uint256 maxSuppy = InvoiceToken(invoiceToken[invoiceId]).maxSupply();
             uint256 supplierPaymentInEth = 0;
             uint256 totalInvestorPaymentInEth = 0;
 
@@ -426,7 +426,7 @@ contract Main is FunctionsClient, ReentrancyGuard, AutomationCompatibleInterface
                 uint256 investmentAmount = amountOfTokensPurchasedByInvestor[invoiceId][investor];
 
                 if (investmentAmount > 0) {
-                    uint256 paymentShareInEth = (totalPaymentInEth * investmentAmount) / totalInvestment;
+                    uint256 paymentShareInEth = (totalPaymentInEth * investmentAmount) / maxSuppy;
                     _sendPayment(investor, paymentShareInEth);
                     totalInvestorPaymentInEth += paymentShareInEth;
                     emit PaymentDistributed(invoiceId, investor, paymentShareInEth);
