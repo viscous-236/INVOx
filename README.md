@@ -79,53 +79,6 @@ forge test
 forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
-## ⚙️ Configuration
-
-```env
-# Network Configuration
-RPC_URL=https://sepolia.infura.io/v3/your-project-id
-PRIVATE_KEY=your-private-key
-
-# Chainlink Configuration
-CHAINLINK_FUNCTIONS_ROUTER=0x...
-CHAINLINK_AUTOMATION_REGISTRY=0x...
-CHAINLINK_SUBSCRIPTION_ID=123
-
-# ERP API Configuration
-ERP_API_ENDPOINT=https://api.erp-provider.com
-ERP_API_KEY=your-erp-api-key
-
-# Contract Addresses
-INVOICE_FACTORY=0x...
-INVESTMENT_POOL=0x...
-PAYMENT_PROCESSOR=0x...
-```
-
-
-
-## 🔒 Security
-
-- **Multi-signature validation** for high-value invoices
-- **Chainlink oracle security** for external data verification
-- **Time-locked contracts** for critical operations
-- **Emergency pause mechanisms** for protocol safety
-- **Comprehensive test coverage** with Foundry
-
-## 🗺️ Roadmap
-
-- **Phase 1**: Core protocol deployment and testing
-- **Phase 2**: ERP integrations and institutional partnerships
-- **Phase 3**: Advanced risk scoring and insurance products
-- **Phase 4**: Multi-chain expansion and governance token
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
