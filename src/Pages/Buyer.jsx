@@ -18,7 +18,6 @@ const Buyer = () => {
   const { address, contract, isConnected } = useWallet();
   const navigate = useNavigate();
 
-  // Contract enums - Updated to match supplier dashboard
   const INVOICE_STATUS = {
     0: 'Pending',
     1: 'Verification In Progress',
@@ -44,14 +43,14 @@ const Buyer = () => {
     };
   }, []);
 
-  // Load buyer's invoices when contract is available
+
   useEffect(() => {
     if (contract && address && isConnected) {
       loadBuyerInvoices();
     }
   }, [contract, address, isConnected]);
 
-  // Check user role and permissions
+
   useEffect(() => {
     const checkUserRole = async () => {
       if (contract && address) {
@@ -101,7 +100,7 @@ const Buyer = () => {
     try {
       setLoading(true);
 
-      // Get buyer's invoice IDs
+
       const invoiceIds = await contract.getBuyerInvoiceIds(address);
       console.log('Buyer Invoice IDs:', invoiceIds);
 
@@ -110,22 +109,17 @@ const Buyer = () => {
         return;
       }
 
-      // Fetch details for each invoice
-      // Fetch details for each invoice
       const invoicePromises = invoiceIds.map(async (id) => {
         try {
           const details = await contract.getInvoiceDetails(id);
 
-          // Correct mapping based on Solidity function signature:
-          // [0] id, [1] supplier, [2] buyer, [3] amount, [4] investors, 
-          // [5] status, [6] dueDate, [7] totalInvestment, [8] isPaid
 
           const dueDate = new Date(Number(details[6]) * 1000);
           const today = new Date();
           const isOverdue = dueDate < today && Number(details[5]) !== 4; // Not paid and overdue
           const daysOverdue = isOverdue ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24)) : 0;
 
-          // Calculate penalty (assuming 1% per day overdue, max 10%)
+
           const baseAmount = Number(ethers.formatEther(details[3]));
           const totalDebtAmount = await getTotalDebtAmount(Number(details[0]));
           const penaltyAmount = totalDebtAmount - baseAmount;
@@ -195,13 +189,11 @@ const Buyer = () => {
 
 
   const handlePayInvoice = (invoice) => {
-    // Validate invoice status
-    if (invoice.statusCode !== 2) { // Not approved
+    if (invoice.statusCode !== 2) {
       alert('❌ Invoice must be approved before payment');
       return;
     }
 
-    // Check if already paid
     if (invoice.isPaid || invoice.statusCode === 4) {
       alert('❌ Invoice has already been paid');
       return;
@@ -216,7 +208,6 @@ const Buyer = () => {
     try {
       setLoading(true);
 
-      // Get the invoice details
       const invoice = await contract.getInvoice(selectedInvoice.id);
       const totalDebtAmount = await contract._getTotalDebtAmount(selectedInvoice.id);
 
@@ -232,7 +223,6 @@ const Buyer = () => {
         penaltyUSD: ethers.formatEther(totalDebtAmount - invoice.amount)
       });
 
-      // ✅ Add validation to prevent sending 0 or negative amounts
       if (totalPaymentInWei <= 0n) {
         alert('❌ Error: Invalid payment amount calculated. Please check the price feed.');
         return;
@@ -253,7 +243,6 @@ Proceed with payment?
         return;
       }
 
-      // ✅ Add balance check before sending transaction
       const signer = await contract.runner;
       const balance = await signer.provider.getBalance(signer.address);
 
@@ -262,15 +251,13 @@ Proceed with payment?
         return;
       }
 
-      // Execute payment
       const tx = await contract.buyerPayment(selectedInvoice.id, {
         value: totalPaymentInWei,
-        gasLimit: 500000 // Set reasonable gas limit
+        gasLimit: 500000
       });
 
       console.log('Payment transaction sent:', tx.hash);
 
-      // Show transaction pending
       alert(`Payment transaction submitted! Hash: ${tx.hash}\nWaiting for confirmation...`);
 
       const receipt = await tx.wait();
@@ -281,7 +268,7 @@ Proceed with payment?
         setSelectedInvoice(null);
         setPaymentAmount('');
 
-        // Reload invoices to reflect updated status
+
         await loadBuyerInvoices();
       } else {
         alert('❌ Payment transaction failed. Please try again.');
@@ -290,7 +277,7 @@ Proceed with payment?
     } catch (error) {
       console.error('Error processing payment:', error);
 
-      // Handle specific contract errors
+
       if (error.message.includes('Main__InvoiceMustBeApproved')) {
         alert('❌ Error: Invoice must be approved before payment');
       } else if (error.message.includes('Main__InsufficientPayment')) {
@@ -304,7 +291,6 @@ Proceed with payment?
       } else if (error.message.includes('Main__InvoiceNotExist')) {
         alert('❌ Error: Invoice does not exist');
       } else if (error.message.includes('user rejected')) {
-        // User cancelled transaction
         console.log('User cancelled transaction');
       } else if (error.message.includes('insufficient funds')) {
         alert('❌ Error: Insufficient ETH balance in your wallet');

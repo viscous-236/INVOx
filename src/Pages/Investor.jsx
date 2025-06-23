@@ -69,26 +69,24 @@ const Investor = () => {
 
     try {
       const currentBlock = await provider.getBlockNumber();
-      const fromBlock = lastPolledBlock || Math.max(0, currentBlock - 5000); // Poll last 1000 blocks or from last polled block
+      const fromBlock = lastPolledBlock || Math.max(0, currentBlock - 5000);
 
 
-      // Create filters for both events
       const tokenPurchaseFilter = contract.filters.SuccessfulTokenPurchase(null, address);
       const paymentDistributedFilter = contract.filters.PaymentDistributed(null, address);
 
-      // Query both event types
       const [tokenPurchaseEvents, paymentDistributedEvents] = await Promise.all([
         contract.queryFilter(tokenPurchaseFilter, fromBlock, currentBlock),
         contract.queryFilter(paymentDistributedFilter, fromBlock, currentBlock)
       ]);
 
-      // Process token purchase events
+
       tokenPurchaseEvents.forEach(event => {
         const [invoiceId, buyer, amount] = event.args;
         if (buyer.toLowerCase() === address.toLowerCase()) {
           const amountInEth = parseFloat(ethers.formatEther(amount));
           const newPayment = {
-            id: `${event.transactionHash}-${event.logIndex}`, // Unique ID based on tx hash and log index
+            id: `${event.transactionHash}-${event.logIndex}`,
             invoice: `#${invoiceId.toString()}`,
             amount: amountInEth,
             timestamp: new Date().toLocaleTimeString(),
@@ -105,7 +103,6 @@ const Investor = () => {
       });
 
 
-      // Update last polled block
       setLastPolledBlock(currentBlock);
 
     } catch (error) {
@@ -133,7 +130,6 @@ const Investor = () => {
         }
       };
     } else {
-      // Clean up polling when disconnected
       if (pollingInterval) {
         clearInterval(pollingInterval);
         setPollingInterval(null);
@@ -193,20 +189,17 @@ const Investor = () => {
     }
   };
 
-  // Enhanced event listener setup with better error handling and reconnection logic
   const setupEventListeners = useCallback(() => {
     if (!contract || !address) {
       console.log('Contract or address not available for event listeners');
       return;
     }
 
-    // Clean up existing listeners
     contract.removeAllListeners('SuccessfulTokenPurchase');
     contract.removeAllListeners('PaymentDistributed');
 
     console.log('Setting up event listeners for SuccessfulTokenPurchase and PaymentDistributed');
 
-    // Enhanced error handling for event listeners
     const handleTokenPurchase = (invoiceId, buyer, amount, event) => {
       try {
         console.log('SuccessfulTokenPurchase event received:', { invoiceId, buyer, amount });
@@ -214,7 +207,7 @@ const Investor = () => {
         if (buyer.toLowerCase() === address.toLowerCase()) {
           const amountInEth = parseFloat(ethers.formatEther(amount));
           const newPayment = {
-            id: `${event.transactionHash}-${event.logIndex}`, // Use tx hash + log index for unique ID
+            id: `${event.transactionHash}-${event.logIndex}`,
             invoice: `#${invoiceId.toString()}`,
             amount: amountInEth,
             timestamp: new Date().toLocaleTimeString(),
@@ -228,10 +221,9 @@ const Investor = () => {
 
           addToPaymentHistory(newPayment);
 
-          // Refresh invoices to update funding status
           setTimeout(() => {
             fetchInvoices();
-          }, 2000); // Small delay to ensure blockchain state is updated
+          }, 2000);
         }
       } catch (error) {
         console.error('Error handling SuccessfulTokenPurchase event:', error);
@@ -239,10 +231,9 @@ const Investor = () => {
     };
 
 
-    // Set up event listeners with error handling
     contract.on('SuccessfulTokenPurchase', handleTokenPurchase);
 
-    // Handle provider connection issues
+
     if (provider) {
       provider.on('disconnect', () => {
         contract.removeAllListeners('SuccessfulTokenPurchase');
@@ -250,7 +241,6 @@ const Investor = () => {
 
       provider.on('connect', () => {
         console.log('Provider reconnected, setting up event listeners again');
-        // Reconnect listeners after a brief delay
         setTimeout(() => {
           setupEventListeners();
         }, 1000);
@@ -402,7 +392,7 @@ const Investor = () => {
 
       const totalValue = priceOfOneTokenInEth * investmentAmount;
       const totalValueInWei = ethers.parseUnits(totalValue.toFixed(18), 'ether');
-      const investmentAmountInWei = ethers.parseEther(investmentAmount.toString()); // Use parseEther for decimal token units
+      const investmentAmountInWei = ethers.parseEther(investmentAmount.toString());
 
       console.log(`Investment amount in wei: ${investmentAmountInWei}`);
       console.log(`Total value in wei: ${totalValueInWei}`);
@@ -417,7 +407,6 @@ const Investor = () => {
 
       console.log(`Transaction sent: ${tx.hash}`);
 
-      // Wait for transaction confirmation
       const receipt = await tx.wait();
       console.log('Transaction confirmed:', receipt);
 
@@ -426,7 +415,6 @@ const Investor = () => {
       setSelectedInvoice(null);
       setInvestmentAmount('');
 
-      // Refresh invoices to show updated funding status
       setTimeout(() => {
         fetchInvoices();
       }, 2000);
@@ -504,7 +492,7 @@ const Investor = () => {
     );
   };
 
-  // Enhanced refresh function for initial load or manual refresh
+
   const refreshPaymentHistory = async () => {
     if (!contract || !address || !provider) {
       console.log('Missing dependencies for refresh:', { contract: !!contract, address: !!address, provider: !!provider });
@@ -515,13 +503,12 @@ const Investor = () => {
     try {
       setLoading(true);
 
-      // Get current block number
+
       const currentBlock = await provider.getBlockNumber();
-      const fromBlock = Math.max(0, currentBlock - 50000); // Last 50000 blocks (roughly 1 week)
+      const fromBlock = Math.max(0, currentBlock - 50000);
 
       console.log(`Refreshing payment history from block ${fromBlock} to ${currentBlock}`);
 
-      // Query past events for this user
       const tokenPurchaseFilter = contract.filters.SuccessfulTokenPurchase(null, address);
 
       const [tokenPurchases] = await Promise.all([
@@ -530,10 +517,8 @@ const Investor = () => {
 
       console.log(`Found ${tokenPurchases.length} token purchases`);
 
-      // Clear existing payment history before adding refreshed data
       setPaymentHistory([]);
 
-      // Process token purchase events
       tokenPurchases.forEach(event => {
         const [invoiceId, buyer, amount] = event.args;
         if (buyer.toLowerCase() === address.toLowerCase()) {
@@ -554,7 +539,6 @@ const Investor = () => {
         }
       });
 
-      // Update last polled block to current block
       setLastPolledBlock(currentBlock);
 
       alert(`Payment history refreshed! Found ${tokenPurchases.length} total events.`);

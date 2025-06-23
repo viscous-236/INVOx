@@ -25,13 +25,13 @@ const UnifiedSupplierDashboard = () => {
 
   const { address, contract, isConnected } = useWallet();
 
-  // Status mapping from contract to UI - Updated according to your contract
+
   const statusMap = {
-    0: 'Pending',              // Pending
-    1: 'Verification In Progress', // VerificationInProgress
-    2: 'Approved',             // Approved
-    3: 'Rejected',             // Rejected
-    4: 'Paid'                  // Paid
+    0: 'Pending',
+    1: 'Verification In Progress',
+    2: 'Approved',
+    3: 'Rejected',
+    4: 'Paid'
   };
 
   useEffect(() => {
@@ -49,7 +49,7 @@ const UnifiedSupplierDashboard = () => {
     };
   }, []);
 
-  // Load supplier's invoices when contract is available
+
   useEffect(() => {
     if (contract && address && isConnected) {
       loadSupplierInvoices();
@@ -94,11 +94,11 @@ const UnifiedSupplierDashboard = () => {
     setError('');
 
     try {
-      // Get supplier's invoice IDs
+
       const supplierInvoiceIds = await contract.getSupplierInvoices(address);
       console.log('Supplier Invoice IDs:', supplierInvoiceIds);
 
-      // Fetch details for each invoice
+
       const invoicePromises = supplierInvoiceIds.map(async (invoiceId) => {
         try {
           const invoiceDetails = await contract.getInvoiceDetails(invoiceId);
@@ -164,7 +164,6 @@ const UnifiedSupplierDashboard = () => {
 
     const { id, buyer, amount, dueDate } = newInvoice;
 
-    // Validation
     if (!id || !buyer || !amount || !dueDate) {
       alert('Please fill in all required fields');
       return;
@@ -175,7 +174,6 @@ const UnifiedSupplierDashboard = () => {
       return;
     }
 
-    // Check if due date is in the future
     const dueDateObj = new Date(dueDate);
     const now = new Date();
     if (dueDateObj <= now) {
@@ -187,14 +185,12 @@ const UnifiedSupplierDashboard = () => {
 
     setLoading(true);
     try {
-      // Check if invoice ID already exists
       const exists = await contract.IdExists(id);
       if (exists) {
         alert('Invoice ID already exists. Please use a different ID.');
         return;
       }
 
-      // Convert amount to wei and dueDate to timestamp
       const amountInWei = ethers.parseEther(amount.toString());
       const dueDateTimestamp = Math.floor(dueDateObj.getTime() / 1000);
 
@@ -210,13 +206,11 @@ const UnifiedSupplierDashboard = () => {
       alert('Invoice created successfully!');
       setNewInvoice({ id: '', buyer: '', amount: '', dueDate: '' });
 
-      // Reload invoices
       await loadSupplierInvoices();
 
     } catch (err) {
       console.error('Error creating invoice:', err);
 
-      // Provide specific error messages based on contract errors
       if (err.message.includes('Main__MustBeUnique')) {
         alert('Invoice ID already exists. Please use a different ID.');
       } else if (err.message.includes('Main__CallerMustBeSupplier')) {
@@ -255,7 +249,7 @@ const UnifiedSupplierDashboard = () => {
 
           if (!isSubscribed) return;
 
-          // Get invoice details to verify it belongs to current supplier
+
           try {
             const invoice = await contract.getInvoice(invoiceId);
             if (invoice.supplier.toLowerCase() !== address.toLowerCase()) {
@@ -267,7 +261,6 @@ const UnifiedSupplierDashboard = () => {
             return;
           }
 
-          // Reset waiting state
           setWaitingForVerification(false);
           setVerificationStartTime(null);
 
@@ -289,11 +282,10 @@ const UnifiedSupplierDashboard = () => {
             setApprovedInvoiceAmount(null);
           }
 
-          // Refresh invoices
           await loadSupplierInvoices();
         };
 
-        // Set up event listener
+
         contract.on('InvoiceVerified', handleInvoiceVerified);
 
         eventCleanup = () => {
@@ -311,26 +303,24 @@ const UnifiedSupplierDashboard = () => {
       }
     };
 
-    // Set up polling as fallback
+
     const startPolling = () => {
       pollInterval = setInterval(async () => {
         if (!isSubscribed || !waitingForVerification) return;
 
         try {
-          // Check if any pending invoices have changed status
           const supplierInvoices = await contract.getSupplierInvoices(address);
 
           for (const invoiceId of supplierInvoices) {
             const invoice = await contract.getInvoice(invoiceId);
             const statusCode = Number(invoice.status);
 
-            // Find corresponding invoice in our state
             const existingInvoice = invoices.find(inv => inv.id === Number(invoiceId));
 
             if (existingInvoice && existingInvoice.statusCode !== statusCode) {
               console.log(`Status change detected for invoice ${invoiceId}: ${existingInvoice.statusCode} -> ${statusCode}`);
 
-              if (statusCode === 2) { // Approved
+              if (statusCode === 2) {
                 setWaitingForVerification(false);
                 setVerificationStartTime(null);
 
@@ -340,7 +330,7 @@ const UnifiedSupplierDashboard = () => {
                   setApprovedInvoiceAmount(invoice.amount);
                   setShowTokenGeneration(true);
                 }
-              } else if (statusCode === 3) { // Rejected
+              } else if (statusCode === 3) {
                 setWaitingForVerification(false);
                 setVerificationStartTime(null);
                 alert(`Invoice #${invoiceId} has been rejected.`);
@@ -353,12 +343,11 @@ const UnifiedSupplierDashboard = () => {
         } catch (error) {
           console.error('Polling error:', error);
         }
-      }, 5000); // Poll every 5 seconds when waiting for verification
+      }, 5000);
     };
 
     setupEventListener();
 
-    // Start polling if waiting for verification
     if (waitingForVerification) {
       startPolling();
     }
@@ -389,7 +378,6 @@ const UnifiedSupplierDashboard = () => {
       if (waitingForVerification) {
         const confirmLeave = window.confirm('Invoice verification is in progress. Are you sure you want to navigate away?');
         if (!confirmLeave) {
-          // Push the current state back to prevent navigation
           window.history.pushState(null, '', window.location.href);
         }
       }
@@ -398,8 +386,6 @@ const UnifiedSupplierDashboard = () => {
     if (waitingForVerification) {
       window.addEventListener('beforeunload', handleBeforeUnload);
       window.addEventListener('popstate', handlePopState);
-
-      // Push a state to handle back button
       window.history.pushState(null, '', window.location.href);
     }
 
@@ -522,7 +508,6 @@ const UnifiedSupplierDashboard = () => {
       return;
     }
 
-    // Check if tokens are already generated
     const isTokenGenerated = await contract.isTokenGenerated(invoiceId);
     if (isTokenGenerated) {
       alert('Tokens have already been generated for this invoice');
@@ -543,7 +528,7 @@ const UnifiedSupplierDashboard = () => {
         setShowTokenGeneration(false);
         setApprovedInvoiceId(null);
         setApprovedInvoiceAmount(null);
-        await loadSupplierInvoices(); // Refresh invoices after token generation
+        await loadSupplierInvoices();
       }
     } catch (err) {
       console.error('Error generating tokens:', err);
@@ -589,7 +574,7 @@ const UnifiedSupplierDashboard = () => {
     }
   };
 
-  // Update the modal to fetch data when selectedInvoice changes
+
   useEffect(() => {
     if (selectedInvoice && (selectedInvoice.status === 'Approved' || selectedInvoice.status === 'Paid')) {
       fetchTokenData(selectedInvoice.id);
@@ -621,7 +606,6 @@ const UnifiedSupplierDashboard = () => {
   };
 
   const getBuyerInitials = (buyer) => {
-    // For address, show first 2 characters after 0x
     if (buyer.startsWith('0x')) {
       return buyer.slice(2, 4).toUpperCase();
     }
@@ -649,7 +633,6 @@ const UnifiedSupplierDashboard = () => {
     setSelectedInvoice(invoice);
   };
 
-  // Check user role on component mount
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
