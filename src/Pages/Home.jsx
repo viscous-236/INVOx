@@ -137,7 +137,7 @@ const Home = () => {
       {/* Header */}
       <header className="relative z-20">
         <nav
-          className="flex items-center justify-between px-8 py-6 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
+          className="flex items-center justify-between px-8 py-4 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
           style={{
             backdropFilter: `blur(${Math.min(scrollY / 8, 20)}px)`,
             background: `rgba(0, 0, 0, ${Math.min(0.6 + scrollY / 1000, 0.9)})`

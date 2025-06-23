@@ -141,7 +141,9 @@ const UnifiedSupplierDashboard = () => {
     const approved = invoices.filter(inv => inv.statusCode === 2).length;
     const rejected = invoices.filter(inv => inv.statusCode === 3).length;
     const paid = invoices.filter(inv => inv.statusCode === 4).length;
-    const totalValue = invoices.reduce((sum, inv) => sum + inv.amount, 0);
+    const totalValue = invoices
+      .filter(inv => (inv.statusCode === 2 || inv.statusCode === 4))
+      .reduce((sum, inv) => sum + inv.amount, 0);
 
     return {
       totalInvoices: invoices.length,
@@ -372,7 +374,7 @@ const UnifiedSupplierDashboard = () => {
         clearInterval(pollInterval);
       }
     };
-  }, [contract, address, waitingForVerification, invoices]);
+  }, [contract, waitingForVerification]);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -668,14 +670,14 @@ const UnifiedSupplierDashboard = () => {
       {/* Header */}
       <header className="relative z-20">
         <nav
-          className="flex items-center justify-between px-8 py-6 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
+          className="flex items-center justify-between px-8 py-4 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
           style={{
             backdropFilter: `blur(${Math.min(scrollY / 8, 20)}px)`,
             background: `rgba(0, 0, 0, ${Math.min(0.6 + scrollY / 1000, 0.9)})`
           }}
         >
+          {/* Logo and Title */}
           <div className="flex items-center space-x-4 group">
-            {/* Logo */}
             <button onClick={() => navigate('/')} className='hover: cursor-pointer'>
               <div className="flex items-center space-x-1">
                 <img src="/logo2.jpeg" alt="Logo" className="w-20 h-18" />
@@ -737,10 +739,10 @@ const UnifiedSupplierDashboard = () => {
         {/* Title */}
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
-            Collection Dashboard
+            Supplier Dashboard
           </h1>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
-            Transform your invoices into liquid assets with instant funding
+            Create, verify and tokenize your invoices into custom ERC-20 tokens
           </p>
         </div>
 
@@ -1128,7 +1130,7 @@ const UnifiedSupplierDashboard = () => {
 
               <button
                 onClick={() => setSelectedInvoice(null)}
-                className="w-full relative bg-gradient-to-r from-purple-600 to-cyan-600 text-white py-3 rounded-xl hover:from-purple-500 hover:to-cyan-500 transition-all duration-300 font-bold shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 overflow-hidden group cursor-pointer"
+                className="w-full relative bg-gradient-to-r from-purple-900/5 via-purple-700/5 to-cyan-600/50 text-white py-3 rounded-xl hover:from-green-500 hover:via-green-600 hover:to-cyan-500 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/50 font-bold text-sm overflow-hidden cursor-pointer border border-purple-400/30 hover:border-purple-300/60 group"
               >
                 <span className="relative z-10">Close</span>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />

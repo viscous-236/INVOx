@@ -587,7 +587,7 @@ const Investor = () => {
       {/* Header */}
       <header className="relative z-20">
         <nav
-          className="flex items-center justify-between px-8 py-6 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
+          className="flex items-center justify-between px-8 py-4 backdrop-blur-2xl bg-black/60 border-b border-gray-700/30 transition-all duration-300"
           style={{
             backdropFilter: `blur(${Math.min(scrollY / 8, 20)}px)`,
             background: `rgba(0, 0, 0, ${Math.min(0.6 + scrollY / 1000, 0.9)})`
@@ -595,16 +595,15 @@ const Investor = () => {
         >
           {/* Logo */}
           <div className="flex items-center space-x-4 group">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-purple-600 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30 group-hover:shadow-purple-500/50 transition-all duration-300">
-                <span className="text-white font-black text-xl">IF</span>
+            <button onClick={() => navigate('/')} className='hover: cursor-pointer'>
+              <div className="flex items-center space-x-1">
+                <img src="/logo2.jpeg" alt="Logo" className="w-20 h-18" />
+                <div className="bg-gradient-to-r text-4xl font-black from-white via-purple-200 to-white bg-clip-text text-transparent mb-2">
+                  INVOx
+                </div>
               </div>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-ping opacity-75" />
-            </div>
-            <div className="text-2xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent tracking-tight">
-              InvoiceFinance
-            </div>
-            <div className="hidden lg:block px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-full text-xs text-green-300 font-medium">
+            </button>
+            <div className="hidden lg:block px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs text-purple-300 font-medium">
               INVESTOR
             </div>
           </div>
