@@ -45,6 +45,8 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 4. **XYZ Corp (Buyer)** pays $10,000 after 60 days
 5. **Investors** receive $10,000 total ($9500 + $500). Each investor get profit according to the ratio of their investment
 
+Valid invoice ids that will be Approved via ERP API - 1001,1002,1003,12345,99999,2001,100,200.
+
 ## 🚀 Features
 
 - 🔐 **Tokenized Invoices**: Invoices are represented as ERC-20 tokens (1 token = $1)
