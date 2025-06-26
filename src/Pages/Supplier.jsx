@@ -938,7 +938,7 @@ const UnifiedSupplierDashboard = () => {
                     </div>
                     <div className="flex justify-between items-center text-sm mt-2">
                       <span className="text-gray-400">Amount:</span>
-                      <span className="text-white font-mono">{Number(ethers.formatEther(approvedInvoiceAmount))} tokens</span>
+                      <span className="text-white font-mono">${Number(ethers.formatEther(approvedInvoiceAmount))}</span>
                     </div>
                   </div>
 
