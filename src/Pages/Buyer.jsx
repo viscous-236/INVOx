@@ -131,7 +131,7 @@ const Buyer = () => {
             buyer: details[2],
             amount: baseAmount,
             investors: details[4],
-            status: isOverdue ? 'Overdue' : INVOICE_STATUS[Number(details[5])] || 'Unknown',
+            status: isOverdue ? ((INVOICE_STATUS[Number(details[5])] == 'Rejected') ? 'Rejected' : 'Overdue') : (INVOICE_STATUS[Number(details[5])] || 'Unknown'),
             statusCode: Number(details[5]),
             dueDate: dueDate.toISOString().split('T')[0],
             totalInvestment: Number(ethers.formatEther(details[7])),
