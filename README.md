@@ -12,18 +12,24 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 ### Simple 3-Step Process
 
 #### 🏭 **Step 1: Supplier Creates Invoice Token**
+<img width="889" alt="image" src="https://github.com/user-attachments/assets/dc1fc784-6f16-493d-bcbf-7c57d54d9ea6" />
+
 1. **Upload Invoice**: Supplier connects their wallet and uploads invoice details (amount, buyer info, due date)
 2. **Smart Verification**: Chainlink Functions automatically verifies the invoice through ERP systems
 3. **Token Creation**: Protocol mints ERC-20 tokens representing the invoice value (1 token = $1 USD)
 4. **List for Funding**: Invoice tokens become available for investors to purchase
 
 #### 💰 **Step 2: Investors Fund the Invoice**
+<img width="888" alt="image" src="https://github.com/user-attachments/assets/4824950c-8b9e-4108-81e1-e75f7d8d850e" />
+
 1. **Browse Opportunities**: Investors see available invoices with expected returns and risk ratings
 2. **Purchase Tokens**: Investors buy invoice tokens using ETH (converted via Chainlink Price Feeds)
 3. **Instant Payout**: Once minimum funding is reached, supplier receives immediate payment
 4. **Wait for Returns**: Investors hold tokens until the buyer pays the invoice
 
 #### 🏢 **Step 3: Buyer Repays & Investors Get Paid**
+<img width="889" alt="image" src="https://github.com/user-attachments/assets/9bf937c9-0fbd-4523-84d1-294697e0b733" />
+
 1. **Payment Due**: Chainlink Automation monitors due dates and notifies the buyer
 2. **Buyer Pays**: Buyer logs in and pays the invoice amount (also handles the payment delay penalty with two days grace period + 4% penalty with each passing day)
 4. **Automatic Distribution**: Smart contract automatically distributes returns to investors based on their token holdings
@@ -33,37 +39,11 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 
 **Scenario**: ABC Manufacturing has a $10,000 invoice from XYZ Corp, due in 60 days.
 
-1. **ABC (Supplier)** uploads the invoice → Protocol mints 10,000 tokens
-2. **Investors** buy all 10,000 tokens for $9,500 ETH (5% discount for 60-day wait)
+1. **ABC (Supplier)** uploads the invoice → Protocol mints 10,000 - 5%*10000 tokens = 95,000
+2. **Investors** buy all 9,500 tokens with 1 token = 1$
 3. **ABC** receives $9,500 immediately (instead of waiting 60 days)
 4. **XYZ Corp (Buyer)** pays $10,000 after 60 days
-5. **Investors** receive $10,000 total (5.26% return on their $9,500 investment)
-
-### Key Benefits
-
-**For Suppliers:**
-- ⚡ Instant liquidity instead of waiting months for payment
-- 🔍 Transparent, automated process with no middlemen
-- 💸 Access to global investor pool
-
-**For Investors:**
-- 📈 Earn yield on real-world assets backed by verified invoices
-- 🛡️ Reduced risk through ERP verification and blockchain transparency
-- 🌍 Diversify across multiple invoices and industries
-
-**For Buyers:**
-- ⏰ Clear payment tracking and automated reminders
-- 🤝 Support supplier cash flow without changing payment terms
-- 📊 Transparent payment history on blockchain
-
-### Security & Trust Features
-
-- **ERP Verification**: Chainlink Functions verify invoices are real through external business systems
-- **Automated Monitoring**: Chainlink Automation tracks payment deadlines and triggers actions
-- **Transparent Tracking**: All transactions recorded on blockchain for full audit trail
-- **Smart Contract Logic**: No human intervention needed - payments distributed automatically
-
----
+5. **Investors** receive $10,000 total ($9600 + $500)
 
 ## 🚀 Features
 
@@ -72,24 +52,6 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 - ⛓️ **Onchain Payment Tracking**: Buyer payments are tracked onchain using Chainlink Automation
 - ⚙️ **ERP Verification**: Invoice metadata is verified via Chainlink Functions through external ERP APIs
 - 💸 **Yield Distribution**: Investors receive returns proportional to their token holdings when the buyer pays
-
----
-
-## 🔄 Protocol Workflow
-
-### 1. Supplier Flow
-- Uploads invoice metadata (value, buyer/supplier address, due date)
-- Chainlink Functions verifies invoice validity via ERP
-- Protocol mints ERC-20 tokens representing the invoice value
-
-### 2. Investor Flow
-- Investors buys the available tokens
-- Funds are transferred to supplier once minimum required capital is raised
-
-### 3. Buyer Flow
-- Buyer logs in and views pending invoices
-- On due date, makes repayment to the contract
-- Investors receive repayment + yield based on their token share
 
 ---
 
