@@ -107,8 +107,8 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 ## 🏗️ Architecture
 
 ### Core Contracts
-- `InvoiceToken.sol` - ERC-20 token representing invoice value
-- 'Main.sol' - Core logic
+- `src/contract/InvoiceToken.sol` - ERC-20 token unique for each Approved Inovice (chainlink PriceFeeds)
+- `src/contract/Main.sol` - Core cogic with Chainlink Functions and Chainlink automation logic
 
 ### Chainlink Integration
 - **Functions**: Verify invoice authenticity through ERP APIs
