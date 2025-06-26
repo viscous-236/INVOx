@@ -22,7 +22,7 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 #### 💰 **Step 2: Investors Fund the Invoice**
 <img width="888" alt="image" src="https://github.com/user-attachments/assets/4824950c-8b9e-4108-81e1-e75f7d8d850e" />
 
-1. **Browse Opportunities**: Investors see available invoices with expected returns and risk ratings
+1. **Browse Opportunities**: Investors see available invoices 
 2. **Purchase Tokens**: Investors buy invoice tokens using ETH (converted via Chainlink Price Feeds)
 3. **Instant Payout**: Once minimum funding is reached, supplier receives immediate payment
 4. **Wait for Returns**: Investors hold tokens until the buyer pays the invoice
