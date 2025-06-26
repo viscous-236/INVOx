@@ -1,4 +1,4 @@
-# 📄 RWA Invoice Financing Protocol
+# 📄 RWA Invoice Financing Protocol - INVOx
 
 A decentralized protocol to finance real-world invoices using tokenized assets and onchain logic. It allows **suppliers** to tokenize invoices, **investors** to fund them in exchange for yield, and **buyers** to repay at maturity. Powered by **Chainlink Functions**, **Automation** and **Feeds**.
 
@@ -25,9 +25,9 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 
 #### 🏢 **Step 3: Buyer Repays & Investors Get Paid**
 1. **Payment Due**: Chainlink Automation monitors due dates and notifies the buyer
-2. **Buyer Pays**: Buyer logs in and repays the invoice amount + agreed interest
-3. **Automatic Distribution**: Smart contract automatically distributes returns to investors based on their token holdings
-4. **Profit Realized**: Investors receive their principal + yield, tokens are burned
+2. **Buyer Pays**: Buyer logs in and pays the invoice amount (also handles the payment delay penalty with two days grace period + 4% penalty with each passing day)
+4. **Automatic Distribution**: Smart contract automatically distributes returns to investors based on their token holdings
+5. **Profit Realized**: Investors receive their principal + yield, tokens are burned
 
 ### Real-World Example
 
