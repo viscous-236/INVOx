@@ -43,7 +43,7 @@ Traditional invoice financing is slow, expensive, and requires intermediaries. S
 2. **Investors** buy all 9,500 tokens with 1 token = 1$
 3. **ABC** receives $9,500 immediately (instead of waiting 60 days)
 4. **XYZ Corp (Buyer)** pays $10,000 after 60 days
-5. **Investors** receive $10,000 total ($9600 + $500)
+5. **Investors** receive $10,000 total ($9500 + $500). Each investor get profit according to the ratio of their investment
 
 ## 🚀 Features
 
