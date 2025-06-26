@@ -315,7 +315,7 @@ contract Main is FunctionsClient, ReentrancyGuard, AutomationCompatibleInterface
         if (block.timestamp > graceDueTime) {
             uint256 overdueTime = block.timestamp - graceDueTime;
             uint256 penalty = (debtAmount * 4 / 100) * (overdueTime / 1 days);
-            return debtAmount + penalty;
+            return (debtAmount + penalty);
         }
         return debtAmount;
     }
@@ -416,7 +416,7 @@ contract Main is FunctionsClient, ReentrancyGuard, AutomationCompatibleInterface
             _sendPayment(invoice.supplier, totalPaymentInEth);
             emit PaymentToSupplier(invoiceId, invoice.supplier, totalPaymentInEth);
         } else {
-            uint256 maxSuppy = InvoiceToken(invoiceToken[invoiceId]).maxSupply();
+            uint256 maxSupply = InvoiceToken(invoiceToken[invoiceId]).maxSupply();
             uint256 supplierPaymentInEth = 0;
             uint256 totalInvestorPaymentInEth = 0;
 
@@ -426,7 +426,7 @@ contract Main is FunctionsClient, ReentrancyGuard, AutomationCompatibleInterface
                 uint256 investmentAmount = amountOfTokensPurchasedByInvestor[invoiceId][investor];
 
                 if (investmentAmount > 0) {
-                    uint256 paymentShareInEth = (totalPaymentInEth * investmentAmount) / maxSuppy;
+                    uint256 paymentShareInEth = (totalPaymentInEth * investmentAmount) / maxSupply;
                     _sendPayment(investor, paymentShareInEth);
                     totalInvestorPaymentInEth += paymentShareInEth;
                     emit PaymentDistributed(invoiceId, investor, paymentShareInEth);
