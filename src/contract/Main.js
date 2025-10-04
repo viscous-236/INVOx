@@ -1,6 +1,6 @@
 import {ethers} from 'ethers';
 
-const CONTRACT_ADDRESS = '0xFF8657E8A1562cE1E51839E92201eF02689DA20b';
+const CONTRACT_ADDRESS = '0x1CB83F0B91361B8F12E661d6fb44bbC1e1810D2e';
 
 
 const CONTRACT_ABI = [
@@ -28,6 +28,8 @@ const CONTRACT_ABI = [
   "function buyerPayment(uint256 _id) external payable",
   "function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData)",
   "function performUpkeep(bytes calldata performData) external",
+  "function tokenGeneration(uint256 invoiceId, uint256 amount) external",
+  "function _getTotalDebtAmount(uint256 _invoiceId) public view returns (uint256)",
 
   // Getter Functions
   "function getBuyerInvoiceIds(address _buyer) external view returns (uint256[] memory)",
@@ -42,10 +44,12 @@ const CONTRACT_ABI = [
   "function getInvoiceDetails(uint256 _invoiceId) external view returns (uint256 id, address supplier, address buyer, uint256 amount, address[] memory investors, uint8 status, uint256 dueDate, uint256 totalInvestment, bool isPaid)",
   "function getInvoiceCount() external view returns (uint256)",
   "function getAllInvoiceIds() external view returns (uint256[] memory)",
-
+  "function getTotalSupply(uint256 _invoiceId) external view returns (uint256)",
+  "function getMaxSupply(uint256 _invoiceId) external view returns (uint256)",
   // State Variables
   "function hasChosenRole(address _user) external view returns (bool)",
   "function IdExists(uint256 _id) external view returns (bool)",
+  "function isTokenGenerated(uint256 _invoiceId) external view returns (bool)",
 ];
 
 

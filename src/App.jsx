@@ -7,6 +7,7 @@ import Supplier from './Pages/Supplier'
 import Investor from './Pages/Investor'
 import { WalletProvider } from './WalletContext'
 import ErrorBoundary from './contract/ErrorBoundry'
+import UnifiedSupplierDashboard from './Pages/Supplier'
 
 
 const ScrollToTop = () => {
@@ -30,7 +31,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/buyer" element={<Buyer />} />
-              <Route path="/supplier" element={<Supplier />} />
+              <Route path="/supplier" element={<UnifiedSupplierDashboard />} />
               <Route path="/investor" element={<Investor />} />
             </Routes>
           </div>
